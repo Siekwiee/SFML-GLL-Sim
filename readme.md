@@ -2,6 +2,8 @@
 
 A visual logic gate simulator. Write circuits in a simple text format, watch signals propagate in real-time.
 
+[Video demo](https://youtu.be/dmqBSP6_abg)
+
 ## Language
 
 please refer to [GLL_Documentation.md](docs/GLL_Documentation.md)
