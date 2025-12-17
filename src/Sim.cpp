@@ -1,0 +1,307 @@
+#include "Sim.hpp"
+#include "Graph.hpp"
+#include <algorithm>
+
+Simulator::Simulator(const Program& p) : prog_(p) {
+  size_t n = prog_.symbolToSignal.size();
+  cur_.assign(n, 0);
+  next_ = cur_;
+  
+  // Compute topological order - cycles are now handled by including all nodes
+  bool allNodesIncluded = computeTopologicalOrder(prog_, topo_);
+  hasCycles_ = !allNodesIncluded || topo_.size() < prog_.nodes.size();
+  
+  // If not all nodes included, try to include them anyway
+  if (topo_.size() < prog_.nodes.size()) {
+    // Find missing nodes and add them
+    for (size_t i = 0; i < prog_.nodes.size(); ++i) {
+      bool found = false;
+      for (int scheduled : topo_) {
+        if (static_cast<int>(i) == scheduled) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        topo_.push_back(static_cast<int>(i));
+      }
+    }
+    hasCycles_ = true;
+  }
+}
+
+void Simulator::update(float dt, float simHz, bool running, bool stepOnce) {
+  if (topo_.empty() || topo_.size() != prog_.nodes.size()) {
+    return; // Invalid topology
+  }
+
+  // Manual step button - step one node at a time for visibility
+  if (stepOnce) {
+    if (!stepping_) {
+      // Start a new step cycle
+      stepping_ = true;
+      stepIdx_ = 0;
+      next_ = cur_;
+      lastVisibleLine_ = -1;
+      lastVisibleNodeIdx_ = -1;
+    }
+    stepOneNode_();
+    return;
+  }
+
+  if (!running || simHz <= 0.0f) {
+    // If paused, keep showing current evaluation line
+    return;
+  }
+
+  acc_ += dt;
+  
+  // Speed controls how fast we step through nodes
+  // simHz is "nodes per second" for visualization
+  float stepTime = 1.0f / simHz;
+  
+  // Always step one node at a time for consistent visualization
+  while (acc_ >= stepTime) {
+    if (!stepping_) {
+      stepping_ = true;
+      stepIdx_ = 0;
+      next_ = cur_;
+      lastVisibleLine_ = -1;
+      lastVisibleNodeIdx_ = -1;
+    }
+    stepOneNode_();
+    acc_ -= stepTime;
+  }
+}
+
+int Simulator::findBtnIndex(const std::string& btnName) const {
+  for (size_t i = 0; i < prog_.nodes.size(); ++i) {
+    if (prog_.nodes[i].type == Program::Node::BTN && prog_.nodes[i].name == btnName) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+void Simulator::setMomentary(const std::string& btnName, bool down) {
+  int idx = findBtnIndex(btnName);
+  if (idx >= 0) {
+    momentary_[idx] = down;
+  }
+}
+
+void Simulator::toggleLatch(const std::string& btnName) {
+  int idx = findBtnIndex(btnName);
+  if (idx >= 0) {
+    latch_[idx] = !latch_[idx];
+  }
+}
+
+bool Simulator::isButtonPressed(const std::string& btnName) const {
+  int idx = findBtnIndex(btnName);
+  if (idx >= 0) {
+    auto it = momentary_.find(idx);
+    return it != momentary_.end() && it->second;
+  }
+  return false;
+}
+
+bool Simulator::isButtonLatched(const std::string& btnName) const {
+  int idx = findBtnIndex(btnName);
+  if (idx >= 0) {
+    auto it = latch_.find(idx);
+    return it != latch_.end() && it->second;
+  }
+  return false;
+}
+
+void Simulator::toggleSignal(const std::string& signalName) {
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end()) {
+    int sigId = it->second;
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
+      uint8_t newVal = cur_[sigId] ? 0 : 1;
+      cur_[sigId] = newVal;
+      // Also update next_ if we're mid-step, so swap doesn't lose the change
+      if (stepping_ && sigId < static_cast<int>(next_.size())) {
+        next_[sigId] = newVal;
+      }
+    }
+  }
+}
+
+void Simulator::setSignal(const std::string& signalName, bool value) {
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end()) {
+    int sigId = it->second;
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
+      uint8_t val = value ? 1 : 0;
+      cur_[sigId] = val;
+      // Also update next_ if we're mid-step
+      if (stepping_ && sigId < static_cast<int>(next_.size())) {
+        next_[sigId] = val;
+      }
+    }
+  }
+}
+
+bool Simulator::getSignalValue(const std::string& signalName) const {
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end()) {
+    int sigId = it->second;
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
+      return cur_[sigId] != 0;
+    }
+  }
+  return false;
+}
+
+// Evaluate a single node and update its output
+bool Simulator::evaluateNode_(int nodeIdx) {
+  const auto& n = prog_.nodes[nodeIdx];
+  bool out = false;
+  
+  switch (n.type) {
+    case Program::Node::AND_:
+      out = true;
+      for (int s : n.inputs) {
+        bool sigVal = (next_[s] != 0);
+        out = out && sigVal;
+      }
+      break;
+      
+    case Program::Node::OR_:
+      out = false;
+      for (int s : n.inputs) {
+        bool sigVal = (next_[s] != 0);
+        out = out || sigVal;
+      }
+      break;
+      
+    case Program::Node::NOT_:
+      if (!n.inputs.empty()) {
+        bool sigVal = (next_[n.inputs[0]] != 0);
+        out = !sigVal;
+      }
+      break;
+    // Set dominant
+    case Program::Node::SR_:
+      for (int s : n.inputs) {   
+        bool S = (next_[n.inputs[0]] != 0);
+        bool R = (next_[n.inputs[1]] != 0);
+        
+        if (S && !R) out = true;
+        else if (!S && R) out = false;
+        else if (!S && !R){
+          out = !n.outputs.empty() ? (next_[n.outputs[0]] != 0) : false;
+        }
+        else if (S && R) out = true;
+      }
+      break;
+    // Reset dominant
+    case Program::Node::RS_:
+      for (int s : n.inputs) {   
+        bool S = (next_[n.inputs[0]] != 0);
+        bool R = (next_[n.inputs[1]] != 0);
+        
+        if (S && !R) out = true;
+        else if (!S && R) out = false;
+        else if (!S && !R){
+          out = !n.outputs.empty() ? (next_[n.outputs[0]] != 0) : false;
+        }
+      }
+      break;
+
+    case Program::Node::BTN: {
+      bool m = momentary_[nodeIdx];
+      bool l = latch_[nodeIdx];
+      out = m || l;
+    } break;
+    
+    default:
+      break;
+  }
+  
+  for (int outputSig : n.outputs) {
+    next_[outputSig] = out ? 1 : 0;
+  }
+  return out;
+}
+
+// Step through one node at a time (for slow visualization)
+void Simulator::stepOneNode_() {
+  if (stepIdx_ >= topo_.size()) {
+    finishStep_();
+    return;
+  }
+  
+  int nodeIdx = topo_[stepIdx_];
+  const auto& n = prog_.nodes[nodeIdx];
+  
+  curNodeIdx_ = nodeIdx;
+  
+  // Only show line highlight for "real" nodes, not internal _not_ nodes
+  // Internal nodes are auto-generated for inline NOT() and clutter the visualization
+  if (n.name.find("_not_") != 0) {
+    curLine_ = n.sourceLine;
+    lastVisibleLine_ = n.sourceLine;
+    lastVisibleNodeIdx_ = nodeIdx;
+  }
+  
+  evaluateNode_(nodeIdx);
+  
+  stepIdx_++;
+  
+  // If we've processed all nodes, finish the step
+  if (stepIdx_ >= topo_.size()) {
+    finishStep_();
+  }
+}
+
+// Finish a step cycle - commit next_ to cur_
+void Simulator::finishStep_() {
+  std::swap(cur_, next_);
+  stepping_ = false;
+  stepIdx_ = 0;
+  curLine_ = lastVisibleLine_;
+  curNodeIdx_ = lastVisibleNodeIdx_;
+}
+
+// Full step - evaluate all nodes at once (for fast simulation)
+void Simulator::stepOnce_() {
+  lastVisibleLine_ = -1;
+  lastVisibleNodeIdx_ = -1;
+  next_ = cur_;
+  
+  // If cycles exist, iterate until stable (max 100 iterations to prevent infinite loops)
+  int maxIterations = hasCycles_ ? 100 : 1;
+  
+  for (int iteration = 0; iteration < maxIterations; ++iteration) {
+    // Store state before evaluation to check for changes
+    std::vector<uint8_t> prevState = next_;
+    
+    for (int nodeIdx : topo_) {
+      curNodeIdx_ = nodeIdx;
+      const auto& node = prog_.nodes[nodeIdx];
+      if (node.name.find("_not_") != 0) {
+        curLine_ = node.sourceLine;
+        lastVisibleLine_ = node.sourceLine;
+        lastVisibleNodeIdx_ = nodeIdx;
+      }
+      evaluateNode_(nodeIdx);
+    }
+    
+    // If no cycles or signals stabilized, break
+    if (!hasCycles_ || prevState == next_) {
+      break;
+    }
+    
+    // For next iteration, use current next_ as starting point
+    // (no swap needed, we're already working with next_)
+  }
+  
+  std::swap(cur_, next_);
+  curLine_ = lastVisibleLine_;
+  curNodeIdx_ = lastVisibleNodeIdx_;
+}
+

@@ -1,0 +1,5 @@
+IN a, b
+OUT x, y
+
+SR setdominant(a, b) -> x
+RS resetdominant(a, b) -> y

@@ -1,0 +1,5 @@
+IN a, b
+OUT x, c, d
+
+OR g1(b, NOT(d)) -> c
+OR g2(a, NOT(c)) -> x, d
