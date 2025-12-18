@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <filesystem>
 
 struct Program {
   std::vector<std::string> inputNames, outputNames;
@@ -22,5 +23,6 @@ struct Program {
   };
   std::vector<Node> nodes;
   std::vector<std::string> sourceLines;
+  std::filesystem::file_time_type lastModifiedAt;
 };
 

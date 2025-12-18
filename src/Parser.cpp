@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 
 static void trim(std::string& s) {
   s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
@@ -43,6 +44,15 @@ static void addTokenSpan(Program& prog, int line, int col0, int col1, const std:
   span.col1 = col1;
   span.symbol = symbol;
   prog.tokens.push_back(span);
+}
+bool fileWatcher(const std::string& path, Program& out) {
+  if (std::filesystem::last_write_time(path) != out.lastModifiedAt) {
+    return true;
+    printf("File changed: %s\n", path.c_str());
+  } else {
+    return false;
+    printf("File unchanged: %s\n", path.c_str());
+  }
 }
 
 ParseResult parseFile(const std::string& path, Program& out) {

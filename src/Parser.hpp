@@ -8,4 +8,5 @@ struct ParseResult {
 };
 
 ParseResult parseFile(const std::string& path, Program& out);
+bool fileWatcher(const std::string& path, Program& out);
 
