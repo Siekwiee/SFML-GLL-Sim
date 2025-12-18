@@ -8,6 +8,7 @@ UI::UI(const Program& prog, Simulator& sim)
   : prog_(prog), sim_(sim) {
   loadFont();
   updateSimSpeed();
+  wasStepping_ = sim_.isSteppingThrough();
   
   // Layout will be updated when window size is known
   // Default initialization
@@ -39,7 +40,13 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
   float currentY = sidebarPadding_;
   float buttonWidth = sidebarWidth_ - 2 * sidebarPadding_;
   
-  playPauseBtn_ = sf::FloatRect({sidebarPadding_, currentY}, {buttonWidth, buttonHeight_});
+  // Play button takes 75% width, repeat button takes 25% on the right
+  float playButtonWidth = buttonWidth * 0.75f;
+  float repeatButtonWidth = buttonWidth * 0.25f - buttonSpacing_ * 0.5f; // Account for spacing
+  float repeatButtonX = sidebarPadding_ + playButtonWidth + buttonSpacing_ * 0.5f;
+  
+  playPauseBtn_ = sf::FloatRect({sidebarPadding_, currentY}, {playButtonWidth, buttonHeight_});
+  playRepeatBtn_ = sf::FloatRect({repeatButtonX, currentY}, {repeatButtonWidth, buttonHeight_});
   currentY += buttonHeight_ + buttonSpacing_;
   
   stepBtn_ = sf::FloatRect({sidebarPadding_, currentY}, {buttonWidth, buttonHeight_});
@@ -105,6 +112,7 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
   if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
     if (keyPressed->code == sf::Keyboard::Key::Space) {
       running_ = !running_;
+      wasStepping_ = sim_.isSteppingThrough(); // Reset tracking when toggling run state
     } else if (keyPressed->code == sf::Keyboard::Key::Period) {
       stepRequested_ = true;
     } else if (keyPressed->code == sf::Keyboard::Key::Equal) {
@@ -133,7 +141,7 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
           activeBtn_ = btnName;
           sim_.setMomentary(btnName, true);
         }
-        return; // Handled
+        return;
       }
     }
     
@@ -141,13 +149,16 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
     for (const auto& [inputName, rect] : inputWidgets_) {
       if (isPointInRect(mousePos, rect)) {
         sim_.toggleSignal(inputName);
-        return; // Handled
+        return;
       }
     }
     
     // Check control buttons
     if (isPointInRect(mousePos, playPauseBtn_)) {
       running_ = !running_;
+      wasStepping_ = sim_.isSteppingThrough(); // Reset tracking when toggling run state
+    } else if (isPointInRect(mousePos, playRepeatBtn_)) {
+      repeatEnabled_ = !repeatEnabled_;
     } else if (isPointInRect(mousePos, stepBtn_)) {
       stepRequested_ = true;
     } else if (isPointInRect(mousePos, speedSlider_)) {
@@ -178,11 +189,16 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
 }
 
 void UI::update(float dt) {
-  // UI state updates if needed
+  bool currentlyStepping = sim_.isSteppingThrough();
+  if (wasStepping_ && !currentlyStepping && running_) {
+    if (!repeatEnabled_) {
+      running_ = false;
+    }
+  }
+  wasStepping_ = currentlyStepping;
 }
 
 void UI::draw(sf::RenderWindow& win) {
-  // Update layout if window size changed
   sf::Vector2u currentSize = win.getSize();
   if (currentSize != windowSize_) {
     updateLayout(currentSize);
@@ -230,6 +246,23 @@ void UI::drawControls(sf::RenderWindow& win) {
   playPauseText.setPosition(playPauseBtn_.position + sf::Vector2f(10, 10));
   playPauseText.setFillColor(Theme::TextDefault);
   win.draw(playPauseText);
+  
+  // Repeat button
+  sf::RectangleShape repeatRect(playRepeatBtn_.size);
+  repeatRect.setPosition(playRepeatBtn_.position);
+  if (!validSim) {
+    repeatRect.setFillColor(Theme::ErrorColor);
+  } else if (repeatEnabled_) {
+    repeatRect.setFillColor(Theme::ButtonRunning);
+  } else {
+    repeatRect.setFillColor(Theme::ButtonDefault);
+  }
+  win.draw(repeatRect);
+  
+  sf::Text repeatText(font_, repeatEnabled_ ? "REPEAT" : "ONCE", 12);
+  repeatText.setPosition(playRepeatBtn_.position + sf::Vector2f(5, 12));
+  repeatText.setFillColor(Theme::TextDefault);
+  win.draw(repeatText);
   
   // Step button
   sf::RectangleShape stepRect(stepBtn_.size);

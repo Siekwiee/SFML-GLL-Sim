@@ -32,6 +32,8 @@ private:
   bool running_ = false;
   float simSpeed_ = 1.0f; // Hz
   bool stepRequested_ = false;
+  bool repeatEnabled_ = true; // Whether to loop the simulation
+  bool wasStepping_ = false; // Track previous stepping state to detect cycle completion
   
   // Mouse state
   bool mouseDown_ = false;
@@ -48,6 +50,7 @@ private:
   
   // Button positions (in left sidebar, vertical layout)
   sf::FloatRect playPauseBtn_;
+  sf::FloatRect playRepeatBtn_;
   sf::FloatRect stepBtn_;
   sf::FloatRect speedSlider_;
   float sliderValue_ = 0.5f; // 0.0 = 0.1x, 1.0 = 10x
