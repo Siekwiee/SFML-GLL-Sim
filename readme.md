@@ -1,6 +1,6 @@
 # Gates
 
-A visual logic gate simulator. Write circuits in a simple text format, watch signals propagate in real-time.
+A visual logic gate simulator. Write circuits in a simple text format, watch signals propagate get evaluated in real-time.
 
 [Video demo](https://youtu.be/dmqBSP6_abg)
 
@@ -22,11 +22,11 @@ please refer to [GLL_Documentation.md](docs/GLL_Documentation.md)
 - Green = HIGH (1)
 - Red = LOW (0)
 
-All IN signals get toggle widgets. BTN nodes are for momentary/latch behavior.
+All IN signals get toggle widgets. BTN nodes are for momentary/latch behavior(WIP).
 
 ## Build
 
-Requires SFML 3.x and CMake.
+Requires SFML 3.x and CMake. Either use one of the provided build scripts, or build manually. If you do not want to build GLL from source, visit our [releases](https://github.com/siekwiee/SFML-GLL-Sim/releases) page.
 
 ```bash
 mkdir build && cd build
@@ -37,5 +37,5 @@ cmake --build .
 ## Run
 
 ```bash
-./build/Debug/GLLSimulator samples/basic.txt
+./build/Debug/GLLSimulator <Path to your .txt/.gll file>
 ```
