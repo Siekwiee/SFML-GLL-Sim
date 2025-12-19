@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <set>
 #include <cctype>
+#include <vector>
 
 UI::UI(const Program& prog, Simulator& sim, ModbusManager& modbus) 
   : prog_(prog), sim_(sim), modbus_(modbus) {
@@ -22,12 +23,41 @@ UI::UI(const Program& prog, Simulator& sim, ModbusManager& modbus)
 }
 
 void UI::loadFont() {
-  // Try to load Geist font
-  if (font_.openFromFile("../vendored/Geist/static/Geist-Regular.ttf") ||
-      font_.openFromFile("vendored/Geist/static/Geist-Regular.ttf") ||
-      font_.openFromFile("../../vendored/Geist/static/Geist-Regular.ttf")) {
-    fontLoaded_ = true;
+  // Potential font paths in order of preference
+  std::vector<std::string> fontPaths = {
+    // 1. Vendored Geist (relative to executable)
+    "../vendored/Geist/static/Geist-Regular.ttf",
+    "vendored/Geist/static/Geist-Regular.ttf",
+    "../../vendored/Geist/static/Geist-Regular.ttf",
+    
+    // 2. System-installed Geist (Windows)
+    "C:/Windows/Fonts/Geist-Regular.ttf",
+    "C:/Windows/Fonts/Geist.ttf",
+    
+    // 3. Common system fallbacks (Windows)
+    "C:/Windows/Fonts/consola.ttf",    // Consolas
+    "C:/Windows/Fonts/arial.ttf",      // Arial
+    "C:/Windows/Fonts/segoeui.ttf",    // Segoe UI
+    "C:/Windows/Fonts/cour.ttf",       // Courier New
+
+    // 4. Linux/macOS system paths (common locations)
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+    "/System/Library/Fonts/SFNS.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+  };
+
+  for (const auto& path : fontPaths) {
+    if (font_.openFromFile(path)) {
+      fontLoaded_ = true;
+      return; // Found a font, we're good
+    }
   }
+
+  // If we reach here, no font was found
+  fontLoaded_ = false;
+  fprintf(stderr, "Warning: No suitable font found. UI rendering will be disabled.\n");
 }
 
 void UI::updateSimSpeed() {
