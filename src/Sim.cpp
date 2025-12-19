@@ -6,6 +6,7 @@ Simulator::Simulator(const Program& p) : prog_(p) {
   size_t n = prog_.symbolToSignal.size();
   cur_.assign(n, 0);
   next_ = cur_;
+  prevStateAtCycleStart_.assign(n, 0);
   
   // Compute topological order - cycles are now handled by including all nodes
   bool allNodesIncluded = computeTopologicalOrder(prog_, topo_);
@@ -28,6 +29,25 @@ Simulator::Simulator(const Program& p) : prog_(p) {
     }
     hasCycles_ = true;
   }
+}
+
+void Simulator::commitPendingInputs_() {
+  for (auto const& [idx, val] : pendingMomentary_) {
+    momentary_[idx] = val;
+  }
+  // We don't clear pendingMomentary because UI sets it every frame while button is held
+  
+  for (auto const& [idx, val] : pendingLatch_) {
+    latch_[idx] = val;
+  }
+  pendingLatch_.clear();
+  
+  for (auto const& [idx, val] : pendingSignals_) {
+    if (idx >= 0 && idx < static_cast<int>(cur_.size())) {
+      cur_[idx] = val;
+    }
+  }
+  pendingSignals_.clear();
 }
 
 void Simulator::update(float dt, float simHz, bool running, bool stepOnce) {
@@ -90,12 +110,17 @@ void Simulator::update(float dt, float simHz, bool running, bool stepOnce) {
   // Manual step button - step one node at a time for visibility
   if (stepOnce) {
     if (!stepping_) {
+      // Apply pending inputs before starting new cycle
+      commitPendingInputs_();
+      
       // Start a new step cycle
       stepping_ = true;
       stepIdx_ = 0;
       next_ = cur_;
       lastVisibleLine_ = -1;
       lastVisibleNodeIdx_ = -1;
+      curLine_ = -1;  // Reset so first node sets it properly
+      prevStateAtCycleStart_ = next_;
     }
     stepOneNode_();
     return;
@@ -108,18 +133,24 @@ void Simulator::update(float dt, float simHz, bool running, bool stepOnce) {
 
   acc_ += dt;
   
-  // Speed controls how fast we step through nodes
-  // simHz is "nodes per second" for visualization
+  // Speed controls how fast we step through nodes for visualization
+  // simHz is "nodes per second" - we step one node at a time to show the blue highlight
   float stepTime = 1.0f / simHz;
   
-  // Always step one node at a time for consistent visualization
+  // Step through nodes one at a time for visualization
+  // This shows the blue line highlight as each node is evaluated
   while (acc_ >= stepTime) {
     if (!stepping_) {
+      // Apply pending inputs before starting new cycle
+      commitPendingInputs_();
+      
       stepping_ = true;
       stepIdx_ = 0;
-      next_ = cur_;
+      next_ = cur_;  // Start new cycle with current state
       lastVisibleLine_ = -1;
       lastVisibleNodeIdx_ = -1;
+      curLine_ = -1;  // Reset to ensure first node sets it properly
+      prevStateAtCycleStart_ = next_;  // Store state at iteration start
     }
     stepOneNode_();
     acc_ -= stepTime;
@@ -138,20 +169,28 @@ int Simulator::findBtnIndex(const std::string& btnName) const {
 void Simulator::setMomentary(const std::string& btnName, bool down) {
   int idx = findBtnIndex(btnName);
   if (idx >= 0) {
-    momentary_[idx] = down;
+    pendingMomentary_[idx] = down;
   }
 }
 
 void Simulator::toggleLatch(const std::string& btnName) {
   int idx = findBtnIndex(btnName);
   if (idx >= 0) {
-    latch_[idx] = !latch_[idx];
+    // We need to know current state to toggle, but for pending we might not have it yet
+    // If not in pending, use current latch_
+    bool current = latch_[idx];
+    if (pendingLatch_.count(idx)) current = pendingLatch_[idx];
+    pendingLatch_[idx] = !current;
   }
 }
 
 bool Simulator::isButtonPressed(const std::string& btnName) const {
   int idx = findBtnIndex(btnName);
   if (idx >= 0) {
+    // Return pending value if available for immediate UI feedback
+    auto itP = pendingMomentary_.find(idx);
+    if (itP != pendingMomentary_.end()) return itP->second;
+    
     auto it = momentary_.find(idx);
     return it != momentary_.end() && it->second;
   }
@@ -161,6 +200,10 @@ bool Simulator::isButtonPressed(const std::string& btnName) const {
 bool Simulator::isButtonLatched(const std::string& btnName) const {
   int idx = findBtnIndex(btnName);
   if (idx >= 0) {
+    // Return pending value if available for immediate UI feedback
+    auto itP = pendingLatch_.find(idx);
+    if (itP != pendingLatch_.end()) return itP->second;
+
     auto it = latch_.find(idx);
     return it != latch_.end() && it->second;
   }
@@ -193,12 +236,9 @@ void Simulator::toggleSignal(const std::string& signalName) {
   if (it != prog_.symbolToSignal.end()) {
     int sigId = it->second;
     if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
-      uint8_t newVal = cur_[sigId] ? 0 : 1;
-      cur_[sigId] = newVal;
-      // Also update next_ if we're mid-step, so swap doesn't lose the change
-      if (stepping_ && sigId < static_cast<int>(next_.size())) {
-        next_[sigId] = newVal;
-      }
+      uint8_t current = cur_[sigId];
+      if (pendingSignals_.count(sigId)) current = pendingSignals_[sigId];
+      pendingSignals_[sigId] = current ? 0 : 1;
     }
   }
 }
@@ -208,12 +248,7 @@ void Simulator::setSignal(const std::string& signalName, bool value) {
   if (it != prog_.symbolToSignal.end()) {
     int sigId = it->second;
     if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
-      uint8_t val = value ? 1 : 0;
-      cur_[sigId] = val;
-      // Also update next_ if we're mid-step
-      if (stepping_ && sigId < static_cast<int>(next_.size())) {
-        next_[sigId] = val;
-      }
+      pendingSignals_[sigId] = value ? 1 : 0;
     }
   }
 }
@@ -223,6 +258,10 @@ bool Simulator::getSignalValue(const std::string& signalName) const {
   if (it != prog_.symbolToSignal.end()) {
     int sigId = it->second;
     if (sigId >= 0 && sigId < static_cast<int>(cur_.size())) {
+      // Return pending value if available for immediate UI feedback
+      auto itP = pendingSignals_.find(sigId);
+      if (itP != pendingSignals_.end()) return itP->second != 0;
+
       return cur_[sigId] != 0;
     }
   }
@@ -379,12 +418,16 @@ void Simulator::stepOneNode_() {
   
   curNodeIdx_ = nodeIdx;
   
+  // Set line highlight BEFORE evaluating - this ensures it shows immediately
   // Only show line highlight for "real" nodes, not internal _not_ nodes
   // Internal nodes are auto-generated for inline NOT() and clutter the visualization
   if (n.name.find("_not_") != 0) {
     curLine_ = n.sourceLine;
     lastVisibleLine_ = n.sourceLine;
     lastVisibleNodeIdx_ = nodeIdx;
+  } else {
+    // For internal nodes, keep the last visible line but don't update curLine_
+    // This prevents the highlight from jumping to internal nodes
   }
   
   evaluateNode_(nodeIdx);
@@ -399,6 +442,7 @@ void Simulator::stepOneNode_() {
 
 // Finish a step cycle - commit next_ to cur_
 void Simulator::finishStep_() {
+  // Always commit results after one pass (standard PLC scan behavior)
   std::swap(cur_, next_);
   stepping_ = false;
   stepIdx_ = 0;
@@ -408,37 +452,25 @@ void Simulator::finishStep_() {
 
 // Full step - evaluate all nodes at once (for fast simulation)
 void Simulator::stepOnce_() {
+  // Apply pending inputs before starting cycle
+  commitPendingInputs_();
+
   lastVisibleLine_ = -1;
   lastVisibleNodeIdx_ = -1;
   next_ = cur_;
-  
-  // If cycles exist, iterate until stable (max 100 iterations to prevent infinite loops)
-  int maxIterations = hasCycles_ ? 100 : 1;
-  
-  for (int iteration = 0; iteration < maxIterations; ++iteration) {
-    // Store state before evaluation to check for changes
-    std::vector<uint8_t> prevState = next_;
-    
-    for (int nodeIdx : topo_) {
-      curNodeIdx_ = nodeIdx;
-      const auto& node = prog_.nodes[nodeIdx];
-      if (node.name.find("_not_") != 0) {
-        curLine_ = node.sourceLine;
-        lastVisibleLine_ = node.sourceLine;
-        lastVisibleNodeIdx_ = nodeIdx;
-      }
-      evaluateNode_(nodeIdx);
+
+  // Execute every node exactly once in program order
+  for (int nodeIdx : topo_) {
+    curNodeIdx_ = nodeIdx;
+    const auto& node = prog_.nodes[nodeIdx];
+    if (node.name.find("_not_") != 0) {
+      curLine_ = node.sourceLine;
+      lastVisibleLine_ = node.sourceLine;
+      lastVisibleNodeIdx_ = nodeIdx;
     }
-    
-    // If no cycles or signals stabilized, break
-    if (!hasCycles_ || prevState == next_) {
-      break;
-    }
-    
-    // For next iteration, use current next_ as starting point
-    // (no swap needed, we're already working with next_)
+    evaluateNode_(nodeIdx);
   }
-  
+
   std::swap(cur_, next_);
   curLine_ = lastVisibleLine_;
   curNodeIdx_ = lastVisibleNodeIdx_;

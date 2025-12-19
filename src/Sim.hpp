@@ -40,8 +40,11 @@ private:
   int lastVisibleNodeIdx_ = -1;
   size_t stepIdx_ = 0;        // Which node in topo_ we're at during slow-step
   bool stepping_ = false;     // Are we in the middle of a slow-step cycle?
-  bool hasCycles_ = false;   // Whether the circuit has cycles
+  bool hasCycles_ = false;   // Whether the circuit has cycles (unused for execution now)
+  std::vector<uint8_t> prevStateAtCycleStart_; // State at start of cycle for UI feedback
   std::unordered_map<int, bool> latch_, momentary_; // by node index
+  std::unordered_map<int, bool> pendingLatch_, pendingMomentary_; // buffered inputs
+  std::unordered_map<int, uint8_t> pendingSignals_; // buffered signal changes
   std::unordered_map<std::string, uint8_t> presentTimeSeconds;
   std::unordered_map<std::string, bool> nodeStatus;
   std::unordered_map<std::string, float> timerElapsedTime; // Elapsed time for each timer (in seconds)
@@ -49,6 +52,7 @@ private:
   void stepOnce_();           // Full step (all nodes at once)
   void stepOneNode_();        // Step single node (for visualization)
   void finishStep_();         // Finish the current step cycle
+  void commitPendingInputs_(); // Apply buffered inputs at start of cycle
   bool evaluateNode_(int nodeIdx);  // Evaluate a single node
   int findBtnIndex(const std::string& btnName) const;
 };

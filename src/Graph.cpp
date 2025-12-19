@@ -12,91 +12,44 @@ bool computeTopologicalOrder(const Program& prog, std::vector<int>& topoOrder) {
 
   const size_t nodeCount = prog.nodes.size();
 
-  // Map each produced signal -> list of producer nodes
-  std::unordered_map<int, std::vector<int>> producers;
-  producers.reserve(nodeCount * 2);
+  // Simply execute nodes in the order they appear in the program
+  // This preserves the exact order as written in the source file.
+  // This is a standard single-pass scan behavior used in industrial logic (PLCs).
+  // Any forward references (line 10 using signal from line 15) will naturally 
+  // have a 1-scan lag, which is predictable and prevents "scary" oscillations.
   for (size_t i = 0; i < nodeCount; ++i) {
-    for (int outputSig : prog.nodes[i].outputs) {
-      producers[outputSig].push_back(static_cast<int>(i));
-    }
+    topoOrder.push_back(static_cast<int>(i));
   }
 
-  // Build adjacency and in-degree in one pass
-  std::vector<std::vector<int>> adj(nodeCount);
-  std::vector<int> inDegree(nodeCount, 0);
-
+  // Detect cycles/forward references for informational purposes.
+  // A forward reference exists if a node reads a signal produced by a later node.
+  std::unordered_map<int, int> signalToProducer; // signal -> producer node index
   for (size_t i = 0; i < nodeCount; ++i) {
     const auto& node = prog.nodes[i];
-
-    // BTN nodes are sources - their inputs are user-controlled
-    if (node.type == Program::Node::BTN) {
-      continue;
-    }
-
-    for (int inputSig : node.inputs) {
-      auto it = producers.find(inputSig);
-      if (it == producers.end()) continue;
-
-      for (int producerIdx : it->second) {
-        if (producerIdx == static_cast<int>(i)) continue;
-        adj[producerIdx].push_back(static_cast<int>(i));
-        inDegree[i]++;
-      }
+    for (int outputSig : node.outputs) {
+      signalToProducer[outputSig] = static_cast<int>(i);
     }
   }
-
-  // Min-heap to keep evaluation order stable (top-to-bottom by source line, then index)
-  auto cmp = [&](int a, int b) {
-    const auto& na = prog.nodes[a];
-    const auto& nb = prog.nodes[b];
-    if (na.sourceLine != nb.sourceLine) return na.sourceLine > nb.sourceLine;
-    return a > b;
-  };
-  std::priority_queue<int, std::vector<int>, decltype(cmp)> ready(cmp);
-
+  
+  // Now check if any node reads a signal produced by a later node
+  bool hasForwardReference = false;
   for (size_t i = 0; i < nodeCount; ++i) {
-    if (inDegree[i] == 0) {
-      ready.push(static_cast<int>(i));
-    }
-  }
-
-  while (!ready.empty()) {
-    int u = ready.top();
-    ready.pop();
-    topoOrder.push_back(u);
-
-    for (int v : adj[u]) {
-      if (--inDegree[v] == 0) {
-        ready.push(v);
-      }
-    }
-  }
-
-  // If not all nodes were scheduled, a cycle exists
-  // Add remaining nodes (cycle nodes) at the end in source line order
-  if (topoOrder.size() < nodeCount) {
-    std::vector<int> cycleNodes;
-    for (size_t i = 0; i < nodeCount; ++i) {
-      bool found = false;
-      for (int scheduled : topoOrder) {
-        if (static_cast<int>(i) == scheduled) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        cycleNodes.push_back(static_cast<int>(i));
-      }
-    }
+    const auto& node = prog.nodes[i];
+    if (node.type == Program::Node::BTN) continue;
     
-    // Sort cycle nodes by source line
-    std::sort(cycleNodes.begin(), cycleNodes.end(), [&](int a, int b) {
-      return prog.nodes[a].sourceLine < prog.nodes[b].sourceLine;
-    });
-    
-    topoOrder.insert(topoOrder.end(), cycleNodes.begin(), cycleNodes.end());
+    for (int inputSig : node.inputs) {
+      auto it = signalToProducer.find(inputSig);
+      if (it != signalToProducer.end() && it->second > static_cast<int>(i)) {
+        hasForwardReference = true;
+        break;
+      }
+    }
+    if (hasForwardReference) break;
   }
 
-  return topoOrder.size() == nodeCount;
+  // Return false if forward references detected
+  return !hasForwardReference;
 }
+
+
 

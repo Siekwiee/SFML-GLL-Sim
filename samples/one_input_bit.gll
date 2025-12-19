@@ -1,0 +1,12 @@
+IN a
+OUT Q
+
+AND flanke(a, NOT(act)) -> press
+
+AND impulse(press, NOT(act)) -> trigger
+
+AND off(press, Q) -> reset
+
+RS main(trigger, reset) -> Q
+
+OR mem_a(a) -> act

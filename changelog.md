@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
+## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
+
+## 0.0.3 - 2025-12-x
+
+- Reversed to having a basic PLC single-pass scan from top to bottom without any fancy ready checks nor sorting.
+- Added forward reference detection
+- Added a Sample for a switch with a SR that has one input for set and reset, containing such forward pass.
+- Added input buffering till the end of a cycle (currently only counts for basic signal inputs)
+- Added support for higher frequencies (UNTESTED)
 
 ## 0.0.2 - 2025-12-19
 

@@ -26,9 +26,9 @@ void UI::loadFont() {
 }
 
 void UI::updateSimSpeed() {
-  // Map slider value (0.0-1.0) to speed (0.5 - 50 Hz)
+  // Map slider value (0.0-1.0) to speed (0.5 - 4000 Hz)
   // Use exponential scale for better control at low speeds
-  simSpeed_ = 0.5f * std::pow(100.0f, sliderValue_);
+  simSpeed_ = 0.5f * std::pow(8000.0f, sliderValue_);
 }
 
 void UI::updateLayout(const sf::Vector2u& windowSize) {
