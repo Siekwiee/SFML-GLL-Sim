@@ -84,17 +84,37 @@ ParseResult parseFile(const std::string& path, Program& out) {
     // Parse IN declaration
     if (line.substr(0, 3) == "IN ") {
       std::string rest = line.substr(3);
-      auto names = split(rest, ',');
+      auto items = split(rest, ',');
       size_t searchStart = 3; // Start after "IN "
-      for (const auto& name : names) {
-        out.inputNames.push_back(name);
+      for (const auto& item : items) {
+        // Check for alias: name(alias)
+        size_t parenOpen = item.find('(');
+        size_t parenClose = item.find(')');
+        
+        std::string name = item;
+        std::string alias = "";
+        
+        if (parenOpen != std::string::npos && parenClose != std::string::npos && parenClose > parenOpen) {
+          name = item.substr(0, parenOpen);
+          alias = item.substr(parenOpen + 1, parenClose - parenOpen - 1);
+          trim(name);
+          trim(alias);
+        }
+
         int sigId = getOrCreateSignal(out, name);
+        if (!alias.empty()) {
+          out.symbolToSignal[alias] = sigId;
+          out.inputNames.push_back(alias);
+        } else {
+          out.inputNames.push_back(name);
+        }
+
         // Find with word boundary check
-        size_t pos = line.find(name, searchStart);
+        size_t pos = line.find(item, searchStart);
         if (pos != std::string::npos) {
           addTokenSpan(out, lineNum, static_cast<int>(pos), 
-                       static_cast<int>(pos + name.length()), name);
-          searchStart = pos + name.length();
+                       static_cast<int>(pos + item.length()), item);
+          searchStart = pos + item.length();
         }
       }
       lineNum++;
@@ -104,17 +124,37 @@ ParseResult parseFile(const std::string& path, Program& out) {
     // Parse OUT declaration
     if (line.substr(0, 4) == "OUT ") {
       std::string rest = line.substr(4);
-      auto names = split(rest, ',');
+      auto items = split(rest, ',');
       size_t searchStart = 4; // Start after "OUT "
-      for (const auto& name : names) {
-        out.outputNames.push_back(name);
+      for (const auto& item : items) {
+        // Check for alias: name(alias)
+        size_t parenOpen = item.find('(');
+        size_t parenClose = item.find(')');
+        
+        std::string name = item;
+        std::string alias = "";
+        
+        if (parenOpen != std::string::npos && parenClose != std::string::npos && parenClose > parenOpen) {
+          name = item.substr(0, parenOpen);
+          alias = item.substr(parenOpen + 1, parenClose - parenOpen - 1);
+          trim(name);
+          trim(alias);
+        }
+
         int sigId = getOrCreateSignal(out, name);
+        if (!alias.empty()) {
+          out.symbolToSignal[alias] = sigId;
+          out.outputNames.push_back(alias);
+        } else {
+          out.outputNames.push_back(name);
+        }
+
         // Find with word boundary check
-        size_t pos = line.find(name, searchStart);
+        size_t pos = line.find(item, searchStart);
         if (pos != std::string::npos) {
           addTokenSpan(out, lineNum, static_cast<int>(pos), 
-                       static_cast<int>(pos + name.length()), name);
-          searchStart = pos + name.length();
+                       static_cast<int>(pos + item.length()), item);
+          searchStart = pos + item.length();
         }
       }
       lineNum++;
