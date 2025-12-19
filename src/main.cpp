@@ -5,6 +5,7 @@
 #include "Parser.hpp"
 #include "Sim.hpp"
 #include "UI.hpp"
+#include "ModbusManager.hpp"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -21,12 +22,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   auto sim = std::make_unique<Simulator>(*prog);
+  auto modbus = std::make_unique<ModbusManager>();
+  
   // Create fullscreen window (borderless)
   auto fsModes = sf::VideoMode::getFullscreenModes();
   sf::RenderWindow win(fsModes[0], "GLLSimulator", sf::Style::Default);
   win.setFramerateLimit(60);
   win.setTitle("GLL - " + std::filesystem::path(fPath).filename().string());
-  auto ui = std::make_unique<UI>(*prog, *sim);
+  auto ui = std::make_unique<UI>(*prog, *sim, *modbus);
   ui->updateLayout(win.getSize());
 
   sf::Clock clock;
@@ -39,14 +42,12 @@ int main(int argc, char** argv) {
         *prog = std::move(tmpProg);
         // recreate sim and ui to make sure sizes match
         sim = std::make_unique<Simulator>(*prog);
-        ui = std::make_unique<UI>(*prog, *sim);
+        ui = std::make_unique<UI>(*prog, *sim, *modbus);
 
         ui->updateLayout(win.getSize());
         win.setTitle("GLL - " + std::filesystem::path(fPath).filename().string());
         printf("Hot-Reload complete\n");
       }
-      Simulator sim(tmpProg);
-      ui->updateLayout(win.getSize());
     }
     for (auto event = win.pollEvent(); event.has_value(); event = win.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
@@ -64,6 +65,11 @@ int main(int argc, char** argv) {
     float dt = clock.restart().asSeconds();
     ui->update(dt);
     sim->update(dt, ui->simSpeed(), ui->isRunning(), ui->stepOnceRequested());
+    
+    // Sync with Modbus if connected
+    if (modbus->isConnected()) {
+      modbus->sync(*sim);
+    }
 
     win.clear(Theme::Background);
     ui->draw(win);

@@ -23,14 +23,18 @@ endif()
 
 find_package(SFML 3 REQUIRED COMPONENTS Graphics Window System)
 
+# Add libmodbus
+add_subdirectory(vendored/libmodbus)
+
 add_executable(GLLSimulator 
   src/main.cpp
   src/Parser.cpp
   src/Graph.cpp
   src/Sim.cpp
   src/UI.cpp
+  src/ModbusManager.cpp
 )
-target_link_libraries(GLLSimulator PRIVATE SFML::Graphics SFML::Window SFML::System)
+target_link_libraries(GLLSimulator PRIVATE SFML::Graphics SFML::Window SFML::System modbus)
 
 # Platform-specific post-build steps
 if(WIN32)
@@ -40,8 +44,8 @@ if(WIN32)
         add_custom_command(
             TARGET GLLSimulator POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:GLLSimulator>"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SFML_DLLS} "$<TARGET_FILE_DIR:GLLSimulator>"
-            COMMENT "Copying SFML DLLs to output dir"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SFML_DLLS} "$<TARGET_FILE:modbus>" "$<TARGET_FILE_DIR:GLLSimulator>"
+            COMMENT "Copying DLLs to output dir"
         )
     endif()
 endif()

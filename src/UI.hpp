@@ -2,12 +2,13 @@
 #include "AST.hpp"
 #include "Sim.hpp"
 #include "Theme.hpp"
+#include "ModbusManager.hpp"
 #include <SFML/Graphics.hpp>
 #include <string>
 #include <unordered_map>
 
 struct UI {
-  UI(const Program& prog, Simulator& sim);
+  UI(const Program& prog, Simulator& sim, ModbusManager& modbus);
   
   void handleEvent(sf::RenderWindow& win, const sf::Event& ev);
   void update(float dt);
@@ -25,6 +26,7 @@ struct UI {
 private:
   const Program& prog_;
   Simulator& sim_;
+  ModbusManager& modbus_;
   
   sf::Font font_;
   bool fontLoaded_ = false;
@@ -34,6 +36,13 @@ private:
   bool stepRequested_ = false;
   bool repeatEnabled_ = true; // Whether to loop the simulation
   bool wasStepping_ = false; // Track previous stepping state to detect cycle completion
+  
+  // Modbus UI state
+  bool settingsOpen_ = false;
+  std::string ipInput_;
+  std::string portInput_;
+  std::string slaveIdInput_;
+  int activeInputField_ = -1; // 0=IP, 1=Port, 2=SlaveID
   
   // Mouse state
   bool mouseDown_ = false;
@@ -52,6 +61,7 @@ private:
   sf::FloatRect playPauseBtn_;
   sf::FloatRect playRepeatBtn_;
   sf::FloatRect stepBtn_;
+  sf::FloatRect settingsBtn_;
   sf::FloatRect speedSlider_;
   float sliderValue_ = 0.5f; // 0.0 = 0.1x, 1.0 = 10x
   float buttonHeight_ = 40.0f;
@@ -72,6 +82,7 @@ private:
   void updateSimSpeed();
   void drawText(sf::RenderWindow& win);
   void drawControls(sf::RenderWindow& win);
+  void drawSettingsPopup(sf::RenderWindow& win);
   void drawTokenHighlights(sf::RenderWindow& win);
   void drawLineHighlight(sf::RenderWindow& win);
   void drawBTNWidgets(sf::RenderWindow& win);

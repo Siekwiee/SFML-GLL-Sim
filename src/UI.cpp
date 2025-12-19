@@ -5,12 +5,17 @@
 #include <set>
 #include <cctype>
 
-UI::UI(const Program& prog, Simulator& sim) 
-  : prog_(prog), sim_(sim) {
+UI::UI(const Program& prog, Simulator& sim, ModbusManager& modbus) 
+  : prog_(prog), sim_(sim), modbus_(modbus) {
   loadFont();
   updateSimSpeed();
   wasStepping_ = sim_.isSteppingThrough();
   
+  // Initialize Modbus input strings
+  ipInput_ = modbus_.getIp();
+  portInput_ = std::to_string(modbus_.getPort());
+  slaveIdInput_ = std::to_string(modbus_.getSlaveId());
+
   // Layout will be updated when window size is known
   // Default initialization
   updateLayout({1920, 1080});
@@ -51,6 +56,9 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
   currentY += buttonHeight_ + buttonSpacing_;
   
   stepBtn_ = sf::FloatRect({sidebarPadding_, currentY}, {buttonWidth, buttonHeight_});
+  currentY += buttonHeight_ + buttonSpacing_;
+  
+  settingsBtn_ = sf::FloatRect({sidebarPadding_, currentY}, {buttonWidth, buttonHeight_});
   currentY += buttonHeight_ + buttonSpacing_;
   
   // Speed slider
@@ -173,6 +181,72 @@ void UI::updateBTNWidgets() {
 }
 
 void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
+  // Handle settings popup events if open
+  if (settingsOpen_) {
+    if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
+      if (keyPressed->code == sf::Keyboard::Key::Escape) {
+        settingsOpen_ = false;
+        return;
+      }
+    }
+
+    if (auto* textEntered = ev.getIf<sf::Event::TextEntered>()) {
+      if (activeInputField_ >= 0) {
+        char c = static_cast<char>(textEntered->unicode);
+        std::string* target = nullptr;
+        if (activeInputField_ == 0) target = &ipInput_;
+        else if (activeInputField_ == 1) target = &portInput_;
+        else if (activeInputField_ == 2) target = &slaveIdInput_;
+
+        if (target) {
+          if (c == '\b') {
+            if (!target->empty()) target->pop_back();
+          } else if (std::isprint(c)) {
+            *target += c;
+          }
+        }
+      }
+    }
+
+    if (auto* mousePressed = ev.getIf<sf::Event::MouseButtonPressed>()) {
+      sf::Vector2f mousePos(static_cast<float>(mousePressed->position.x), static_cast<float>(mousePressed->position.y));
+      float cardWidth = 400.0f;
+      float cardHeight = 350.0f;
+      sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
+
+      // Check input fields
+      activeInputField_ = -1;
+      for (int i = 0; i < 3; ++i) {
+        sf::FloatRect fieldRect({cardPos.x + 150, cardPos.y + 70 + i * 50 - 5}, {200, 30});
+        if (isPointInRect(mousePos, fieldRect)) {
+          activeInputField_ = i;
+        }
+      }
+
+      // Connect Button
+      sf::FloatRect connectBtnRect({cardPos.x + 20, cardPos.y + 250}, {100, 40});
+      if (isPointInRect(mousePos, connectBtnRect)) {
+        if (modbus_.isConnected()) {
+          modbus_.disconnect();
+        } else {
+          modbus_.setIp(ipInput_);
+          try {
+            modbus_.setPort(std::stoi(portInput_));
+            modbus_.setSlaveId(std::stoi(slaveIdInput_));
+          } catch (...) {}
+          modbus_.connect();
+        }
+      }
+
+      // Close Button
+      sf::FloatRect closeBtnRect({cardPos.x + 280, cardPos.y + 250}, {100, 40});
+      if (isPointInRect(mousePos, closeBtnRect)) {
+        settingsOpen_ = false;
+      }
+    }
+    return; // Block other events when settings are open
+  }
+
   // Handle text input for timer widgets FIRST (before other events)
   if (isEditingTimer_ && !activeTimerWidget_.empty()) {
     if (auto* textEntered = ev.getIf<sf::Event::TextEntered>()) {
@@ -292,6 +366,8 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
       repeatEnabled_ = !repeatEnabled_;
     } else if (isPointInRect(mousePos, stepBtn_)) {
       stepRequested_ = true;
+    } else if (isPointInRect(mousePos, settingsBtn_)) {
+      settingsOpen_ = true;
     } else if (isPointInRect(mousePos, speedSlider_)) {
       float relX = mousePos.x - speedSlider_.position.x;
       sliderValue_ = std::clamp(relX / speedSlider_.size.x, 0.0f, 1.0f);
@@ -341,6 +417,7 @@ void UI::draw(sf::RenderWindow& win) {
   drawLineHighlight(win);
   drawText(win);
   drawTokenHighlights(win);
+  drawSettingsPopup(win);
 }
 
 void UI::drawControls(sf::RenderWindow& win) {
@@ -406,6 +483,17 @@ void UI::drawControls(sf::RenderWindow& win) {
   stepText.setPosition(stepBtn_.position + sf::Vector2f(10, 10));
   stepText.setFillColor(Theme::TextDefault);
   win.draw(stepText);
+
+  // Settings button
+  sf::RectangleShape settingsRect(settingsBtn_.size);
+  settingsRect.setPosition(settingsBtn_.position);
+  settingsRect.setFillColor(modbus_.isConnected() ? Theme::ButtonRunning : Theme::ButtonDefault);
+  win.draw(settingsRect);
+
+  sf::Text settingsText(font_, modbus_.isConnected() ? "Modbus: Connected" : "Modbus: Settings", 14);
+  settingsText.setPosition(settingsBtn_.position + sf::Vector2f(10, 10));
+  settingsText.setFillColor(Theme::TextDefault);
+  win.draw(settingsText);
   
   // Speed slider
   sf::RectangleShape sliderBg(speedSlider_.size);
@@ -697,4 +785,92 @@ sf::Color UI::getSignalColor(int signalId) const {
 bool UI::isPointInRect(const sf::Vector2f& point, const sf::FloatRect& rect) const {
   return point.x >= rect.position.x && point.x <= rect.position.x + rect.size.x &&
          point.y >= rect.position.y && point.y <= rect.position.y + rect.size.y;
+}
+
+void UI::drawSettingsPopup(sf::RenderWindow& win) {
+  if (!settingsOpen_ || !fontLoaded_) return;
+
+  // Semi-transparent overlay
+  sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowSize_.x), static_cast<float>(windowSize_.y)));
+  overlay.setFillColor(sf::Color(0, 0, 0, 150));
+  win.draw(overlay);
+
+  // Popup card
+  float cardWidth = 400.0f;
+  float cardHeight = 350.0f;
+  sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
+
+  sf::RectangleShape card(sf::Vector2f(cardWidth, cardHeight));
+  card.setPosition(cardPos);
+  card.setFillColor(sf::Color(45, 45, 50));
+  card.setOutlineColor(sf::Color(100, 100, 110));
+  card.setOutlineThickness(2);
+  win.draw(card);
+
+  sf::Text title(font_, "Modbus TCP Settings", 20);
+  title.setPosition(cardPos + sf::Vector2f(20, 20));
+  title.setFillColor(Theme::TextDefault);
+  win.draw(title);
+
+  float currentY = cardPos.y + 70;
+  auto drawInput = [&](const std::string& label, const std::string& value, int id) {
+    sf::Text l(font_, label, 14);
+    l.setPosition({cardPos.x + 20, currentY});
+    l.setFillColor(Theme::TextDefault);
+    win.draw(l);
+
+    sf::RectangleShape inputBg(sf::Vector2f(200, 30));
+    inputBg.setPosition({cardPos.x + 150, currentY - 5});
+    inputBg.setFillColor(activeInputField_ == id ? sf::Color(60, 60, 70) : sf::Color(30, 30, 35));
+    inputBg.setOutlineColor(activeInputField_ == id ? Theme::TextYellow : sf::Color(80, 80, 80));
+    inputBg.setOutlineThickness(1);
+    win.draw(inputBg);
+
+    sf::Text v(font_, value + (activeInputField_ == id ? "|" : ""), 14);
+    v.setPosition({cardPos.x + 160, currentY});
+    v.setFillColor(Theme::TextDefault);
+    win.draw(v);
+
+    currentY += 50;
+  };
+
+  drawInput("IP Address:", ipInput_, 0);
+  drawInput("Port:", portInput_, 1);
+  drawInput("Slave ID:", slaveIdInput_, 2);
+
+  // Status message
+  if (!modbus_.getLastError().empty()) {
+    sf::Text err(font_, modbus_.getLastError(), 12);
+    err.setPosition({cardPos.x + 20, currentY});
+    err.setFillColor(Theme::TextRed);
+    win.draw(err);
+  } else if (modbus_.isConnected()) {
+    sf::Text status(font_, "Connected", 12);
+    status.setPosition({cardPos.x + 20, currentY});
+    status.setFillColor(Theme::TextGreen);
+    win.draw(status);
+  }
+  currentY += 30;
+
+  // Connect/Disconnect Button
+  sf::RectangleShape btn(sf::Vector2f(100, 40));
+  btn.setPosition({cardPos.x + 20, currentY});
+  btn.setFillColor(modbus_.isConnected() ? Theme::ErrorColor : Theme::ButtonRunning);
+  win.draw(btn);
+
+  sf::Text btnText(font_, modbus_.isConnected() ? "Disconnect" : "Connect", 14);
+  btnText.setPosition({cardPos.x + 30, currentY + 10});
+  btnText.setFillColor(sf::Color::White);
+  win.draw(btnText);
+
+  // Close Button
+  sf::RectangleShape closeBtn(sf::Vector2f(100, 40));
+  closeBtn.setPosition({cardPos.x + 280, currentY});
+  closeBtn.setFillColor(Theme::ButtonDefault);
+  win.draw(closeBtn);
+
+  sf::Text closeText(font_, "Close", 14);
+  closeText.setPosition({cardPos.x + 310, currentY + 10});
+  closeText.setFillColor(sf::Color::White);
+  win.draw(closeText);
 }

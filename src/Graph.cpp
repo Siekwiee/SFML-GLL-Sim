@@ -50,6 +50,3 @@ bool computeTopologicalOrder(const Program& prog, std::vector<int>& topoOrder) {
   // Return false if forward references detected
   return !hasForwardReference;
 }
-
-
-

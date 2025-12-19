@@ -9,6 +9,8 @@
 - Added a Sample for a switch with a SR that has one input for set and reset, containing such forward pass.
 - Added input buffering till the end of a cycle (currently only counts for basic signal inputs)
 - Added support for higher frequencies (UNTESTED)
+- Added ModBus Client Support
+- Added FactoryIO A-To-B GLL example
 
 ## 0.0.2 - 2025-12-19
 

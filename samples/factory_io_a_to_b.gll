@@ -1,0 +1,14 @@
+# Factory IO "From A to B" Sample
+# 
+# Modbus Mapping:
+# INPUT_0  : Sensor at the end of conveyor (triggers when part arrives)
+# INPUT_1  : Factory IO "Running" status (high when simulation is active)
+# OUTPUT_0 : Conveyor motor
+#
+# Logic: Run the conveyor if Factory IO is running AND the part hasn't reached the sensor yet.
+IN INPUT_0, INPUT_1
+OUT OUTPUT_0
+
+
+AND g2(INPUT_0, INPUT_1) -> OUTPUT_0
+
