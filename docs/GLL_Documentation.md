@@ -124,6 +124,52 @@ RS setBlock(a, b) -> c
 | 1 | 0 | 1 |
 | 1 | 1 | 0 |
 
+#### `TON`
+
+The `TON` gate is a timer on delay. When the input goes HIGH, the timer starts counting. The output goes HIGH only after the input has been HIGH for the preset time (PT) duration. If the input goes LOW before the preset time elapses, the timer resets and the output remains LOW.
+
+- Inputs: `IN` (input signal)
+
+- Outputs: `Q`
+
+- Preset Time (PT): Configured in the UI sidebar for each TON gate. Click the timer widget to edit. Supports formats like `10s` (seconds), `2m` (minutes), `1h` (hours).
+
+example:
+
+```
+TON delay_on(start) -> delayed_output
+```
+
+**Behavior**:
+
+- Input goes HIGH → Timer starts counting
+- Input stays HIGH for PT duration → Output goes HIGH
+- Input goes LOW before PT duration → Timer resets, output stays LOW
+- Input goes LOW after output is HIGH → Output goes LOW immediately
+
+#### `TOF`
+
+The `TOF` gate is a timer off delay. When the input goes LOW, the timer starts counting. The output stays HIGH for the preset time (PT) duration after the input goes LOW, then goes LOW. If the input goes HIGH again before the timer expires, the timer resets and the output stays HIGH.
+
+- Inputs: `IN` (input signal)
+
+- Outputs: `Q`
+
+- Preset Time (PT): Configured in the UI sidebar for each TOF gate. Click the timer widget to edit. Supports formats like `10s` (seconds), `2m` (minutes), `1h` (hours).
+
+example:
+
+```
+TOF delay_off(stop) -> delayed_output
+```
+
+**Behavior**:
+
+- Input goes HIGH → Output goes HIGH immediately
+- Input goes LOW → Timer starts counting, output stays HIGH
+- Timer expires (PT duration) → Output goes LOW
+- Input goes HIGH again before timer expires → Timer resets, output stays HIGH
+
 ### Other nodes
 
 BTN nodes are used to describe buttons that can be pressed or released. not done yet (WIP).

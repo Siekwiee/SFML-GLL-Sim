@@ -15,7 +15,7 @@ struct Program {
   std::vector<TokenSpan> tokens;
   
   struct Node {
-    enum Type { AND_, OR_, NOT_, SR_, RS_, BTN } type;
+    enum Type { AND_, OR_, NOT_, SR_, RS_, TON_, TOF_, BTN } type;
     std::string name;
     std::vector<int> inputs;
     std::vector<int> outputs;

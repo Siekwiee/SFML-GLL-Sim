@@ -175,6 +175,10 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::SR_;
     } else if (gateType == "RS") {
       type = Program::Node::RS_;
+    } else if (gateType == "TON") {
+      type = Program::Node::TON_;
+    } else if (gateType == "TOF") {
+      type = Program::Node::TOF_;
     } else if (gateType == "BTN") {
       type = Program::Node::BTN;
     } else {

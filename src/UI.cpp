@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <set>
+#include <cctype>
 
 UI::UI(const Program& prog, Simulator& sim) 
   : prog_(prog), sim_(sim) {
@@ -63,9 +64,51 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
   // Update BTN widgets
   updateBTNWidgets();
 }
+static float parseTimeStringToFloat(const std::string& timeString){
+  if (timeString.empty()){
+    return 3.0f;
+  } else{
+    // parse number (amount of time)
+    size_t end = 0;
+    while (end < timeString.size() && (std::isdigit(timeString[end]) || timeString[end] == '.')){
+      end++;
+    }
+    if (end == 0) return 3.0f;  // No number found, return default
+    float number = std::stof(timeString.substr(0, end));
+    // parse format (s seconds, m minutes, h hours)
+    if(end < timeString.size()){
+      char unit = std::tolower(timeString[end]);
+      if (unit =='m'){
+        return number * 60.0f;
+      } else if (unit =='h'){
+        return number * 3600.0f;
+      }
+    }
+    return number;
+  }
+}
+
+static std::string parseFloatToTimeString(float floatInSeconds){
+  if (floatInSeconds <= 0.0f){
+    return "3s";
+  }
+  
+  if (floatInSeconds >= 3600.0f && std::fmod(floatInSeconds, 3600.0f) < 0.01f) {
+    return std::to_string(static_cast<int>(floatInSeconds / 3600.0f)) + "h";
+  }
+
+  else if (floatInSeconds >= 60.0f && std::fmod(floatInSeconds, 60.0f) < 0.01f) {
+    return std::to_string(static_cast<int>(floatInSeconds / 60.0f)) + "m";
+  }
+
+  else {
+    return std::to_string(static_cast<int>(floatInSeconds)) + "s";
+  }
+}
 
 void UI::updateBTNWidgets() {
   btnWidgets_.clear();
+  tNodeWidgets_.clear();
   inputWidgets_.clear();
   
   if (!fontLoaded_) return;
@@ -89,12 +132,34 @@ void UI::updateBTNWidgets() {
     }
   }
   
+  std::vector<const Program::Node*> tNodes;
+  for (const auto& node : prog_.nodes){
+     if (node.type == Program::Node::TOF_ || node.type == Program::Node::TON_){
+      tNodes.push_back(&node);
+     }
+  }
+
   // Create widgets for all IN signals (inputs you can toggle)
   for (const auto& inputName : prog_.inputNames) {
     // Skip if already has an explicit BTN
     if (btnControlledSignals.count(inputName) > 0) continue;
     
     inputWidgets_[inputName] = sf::FloatRect({sidebarPadding_, widgetY}, {widgetWidth, widgetHeight});
+    widgetY += widgetHeight + 5.0f;
+  }
+
+  // Create widgets for all T nodes
+  for (const auto& node : tNodes){
+    tNodeWidgets_[node->name] = sf::FloatRect({sidebarPadding_, widgetY}, {widgetWidth, widgetHeight});
+    // init text input with default or current preset time
+    if (timerTextInputs_.count(node->name) == 0){
+      float pt = sim_.getPresetTime(node->name);
+      if (pt > 0.0f){
+        timerTextInputs_[node->name] = parseFloatToTimeString(pt);
+      } else {
+        timerTextInputs_[node->name] = "3s";
+      }
+    }
     widgetY += widgetHeight + 5.0f;
   }
   
@@ -108,6 +173,46 @@ void UI::updateBTNWidgets() {
 }
 
 void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
+  // Handle text input for timer widgets FIRST (before other events)
+  if (isEditingTimer_ && !activeTimerWidget_.empty()) {
+    if (auto* textEntered = ev.getIf<sf::Event::TextEntered>()) {
+      // Handle printable characters
+      char c = static_cast<char>(textEntered->unicode);
+      if (std::isprint(c) || c == 's' || c == 'm' || c == 'h' || c == 'S' || c == 'M' || c == 'H') {
+        timerTextInputs_[activeTimerWidget_] += c;
+      }
+    }
+    
+    if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
+      if (keyPressed->code == sf::Keyboard::Key::Enter) {
+        // Commit changes
+        const std::string& text = timerTextInputs_[activeTimerWidget_];
+        float seconds = parseTimeStringToFloat(text);
+        if (seconds > 0.0f) {
+          sim_.setPresetTime(activeTimerWidget_, seconds);
+        }
+        isEditingTimer_ = false;
+        activeTimerWidget_.clear();
+        return;  // Don't process other events
+      } else if (keyPressed->code == sf::Keyboard::Key::Escape) {
+        // Cancel editing - restore original value
+        float pt = sim_.getPresetTime(activeTimerWidget_);
+        timerTextInputs_[activeTimerWidget_] = parseFloatToTimeString(pt);
+        isEditingTimer_ = false;
+        activeTimerWidget_.clear();
+        return;
+      } else if (keyPressed->code == sf::Keyboard::Key::Backspace) {
+        // Delete last character
+        if (!timerTextInputs_[activeTimerWidget_].empty()) {
+          timerTextInputs_[activeTimerWidget_].pop_back();
+        }
+        return;  // Don't process other events
+      }
+    }
+    // If we're editing, don't process other events
+    return;
+  }
+  
   // SFML 3.x uses variant-based events
   if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
     if (keyPressed->code == sf::Keyboard::Key::Space) {
@@ -151,6 +256,32 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
         sim_.toggleSignal(inputName);
         return;
       }
+    }
+    
+    // Check T node widgets (click to start editing)
+    for (const auto& [nodeName, rect] : tNodeWidgets_) {
+      if (isPointInRect(mousePos, rect)) {
+        // Start editing this timer widget
+        activeTimerWidget_ = nodeName;
+        isEditingTimer_ = true;
+        // Initialize text if empty
+        if (timerTextInputs_.count(nodeName) == 0) {
+          float pt = sim_.getPresetTime(nodeName);
+          timerTextInputs_[nodeName] = parseFloatToTimeString(pt);
+        }
+        return;
+      }
+    }
+    
+    // If clicking elsewhere while editing, commit changes
+    if (isEditingTimer_ && !activeTimerWidget_.empty()) {
+      const std::string& text = timerTextInputs_[activeTimerWidget_];
+      float seconds = parseTimeStringToFloat(text);
+      if (seconds > 0.0f) {
+        sim_.setPresetTime(activeTimerWidget_, seconds);
+      }
+      isEditingTimer_ = false;
+      activeTimerWidget_.clear();
     }
     
     // Check control buttons
@@ -206,6 +337,7 @@ void UI::draw(sf::RenderWindow& win) {
   
   drawControls(win);
   drawBTNWidgets(win);
+  drawTimerWidgets(win);
   drawLineHighlight(win);
   drawText(win);
   drawTokenHighlights(win);
@@ -493,6 +625,64 @@ void UI::drawBTNWidgets(sf::RenderWindow& win) {
         win.draw(text);
       }
     }
+  }
+}
+
+void UI::drawTimerWidgets(sf::RenderWindow& win) {
+  if (!fontLoaded_) return;  
+  // Draw each timer widget
+  for (const auto& [nodeName, rect] : tNodeWidgets_) {
+    // Get timer status from simulator
+    bool isActive = sim_.getTGateStatus(nodeName);
+    
+    // Choose background color based on status
+    sf::Color bgColor;
+    if (isActive) {
+      // Yellowish when active (timer is ticking)
+      bgColor = sf::Color(220, 200, 100, 220);  // Yellowish
+    } 
+    if(!isActive) {
+      // Grayish when inactive
+      bgColor = sf::Color(70, 70, 75, 200);  // Dark grayish
+    }
+    
+    // Draw widget background
+    sf::RectangleShape widget(rect.size);
+    widget.setPosition(rect.position);
+    widget.setFillColor(bgColor);
+    
+    // Highlight outline if currently being edited
+    if (isEditingTimer_ && activeTimerWidget_ == nodeName) {
+      widget.setOutlineColor(Theme::TextYellow);
+      widget.setOutlineThickness(2);
+    } else {
+      widget.setOutlineColor(isActive ? Theme::TextYellow : Theme::TextDefault);
+      widget.setOutlineThickness(isActive ? 2 : 1);
+    }
+    win.draw(widget);
+    
+    // Get the text to display
+    std::string displayText;
+    if (timerTextInputs_.count(nodeName) > 0) {
+      displayText = timerTextInputs_[nodeName];
+    } else {
+      float pt = sim_.getPresetTime(nodeName);
+      displayText = parseFloatToTimeString(pt);
+    }
+    
+    // Format label: "NodeName: PT" or "NodeName: [editing]"
+    std::string label = nodeName + ": ";
+    if (isEditingTimer_ && activeTimerWidget_ == nodeName) {
+      label += displayText + "|";  // Cursor indicator
+    } else {
+      label += displayText;
+    }
+    
+    // Draw text
+    sf::Text text(font_, label, static_cast<unsigned int>(Theme::FontSize));
+    text.setPosition(rect.position + sf::Vector2f(10, 5));
+    text.setFillColor(isActive ? sf::Color::White : Theme::TextDefault);
+    win.draw(text);
   }
 }
 

@@ -35,6 +35,58 @@ void Simulator::update(float dt, float simHz, bool running, bool stepOnce) {
     return; // Invalid topology
   }
 
+  // Update timer elapsed times if running
+  if (running && dt > 0.0f) {
+    for (const auto& node : prog_.nodes) {
+      if (node.type == Program::Node::TON_){
+        // Check if input is active
+        bool inputActive = false;
+        if (!node.inputs.empty()) {
+          int inputSig = node.inputs[0];
+          if (inputSig >= 0 && inputSig < static_cast<int>(cur_.size())) {
+            inputActive = (cur_[inputSig] != 0);
+          }
+        }
+        //TON
+        if (inputActive){
+          timerElapsedTime[node.name] += dt;
+        }
+        float epTime = timerElapsedTime[node.name];
+        if (epTime>=getPresetTime(node.name)){
+          timerElapsedTime[node.name] = 0.0f;
+          setTGateStatus(node.name, true);
+        }
+        if (!inputActive && getTGateStatus(node.name)){
+          // Reset
+          timerElapsedTime[node.name] = 0.0f;
+          setTGateStatus(node.name, false);
+        }
+      }
+      if (node.type == Program::Node::TOF_) {
+        // Check if input is active
+        bool inputActive = false;
+        if (!node.inputs.empty()) {
+          int inputSig = node.inputs[0];
+          if (inputSig >= 0 && inputSig < static_cast<int>(cur_.size())) {
+            inputActive = (cur_[inputSig] != 0);
+          }
+        }
+        if (inputActive) {
+          timerElapsedTime[node.name] = 0.0f;
+        } else if (!inputActive && getTGateStatus(node.name)) {
+          // TOF: input is low, status is true, timer is counting down
+          timerElapsedTime[node.name] += dt;
+        }
+        float epTime = timerElapsedTime[node.name];
+        if (epTime>=getPresetTime(node.name)) {
+          // TOF: timer elapsed, reset
+          timerElapsedTime[node.name] = 0.0f;
+          setTGateStatus(node.name, false);
+        }
+      }
+    }
+  }
+  
   // Manual step button - step one node at a time for visibility
   if (stepOnce) {
     if (!stepping_) {
@@ -115,6 +167,27 @@ bool Simulator::isButtonLatched(const std::string& btnName) const {
   return false;
 }
 
+void Simulator::setPresetTime(const std::string& gateName, float seconds) {
+  presentTimeSeconds[gateName] = static_cast<uint8_t>(std::clamp(seconds, 0.0f, 255.0f));
+}
+float Simulator::getPresetTime(const std::string& gateName){
+  auto it = presentTimeSeconds.find(gateName);
+  if (it != presentTimeSeconds.end()){
+    return static_cast<float>(it->second);
+  }
+  return 3.0f;
+}
+bool Simulator::getTGateStatus(const std::string& gateName) {
+  auto it = nodeStatus.find(gateName);
+  if (it != nodeStatus.end()){
+    return it->second;
+  }
+  return false;
+}
+
+void Simulator::setTGateStatus(const std::string& gateName, bool status) {
+  nodeStatus[gateName] = status;
+}
 void Simulator::toggleSignal(const std::string& signalName) {
   auto it = prog_.symbolToSignal.find(signalName);
   if (it != prog_.symbolToSignal.end()) {
@@ -162,30 +235,30 @@ bool Simulator::evaluateNode_(int nodeIdx) {
   bool out = false;
   
   switch (n.type) {
-    case Program::Node::AND_:
+    case Program::Node::AND_:{
       out = true;
       for (int s : n.inputs) {
         bool sigVal = (next_[s] != 0);
         out = out && sigVal;
       }
       break;
-      
-    case Program::Node::OR_:
+    }
+    case Program::Node::OR_:{
       out = false;
       for (int s : n.inputs) {
         bool sigVal = (next_[s] != 0);
         out = out || sigVal;
-      }
-      break;
-      
-    case Program::Node::NOT_:
+      } break;
+    }
+    case Program::Node::NOT_:{
       if (!n.inputs.empty()) {
         bool sigVal = (next_[n.inputs[0]] != 0);
         out = !sigVal;
       }
       break;
+    }
     // Set dominant
-    case Program::Node::SR_:
+    case Program::Node::SR_:{
       for (int s : n.inputs) {   
         bool S = (next_[n.inputs[0]] != 0);
         bool R = (next_[n.inputs[1]] != 0);
@@ -196,10 +269,10 @@ bool Simulator::evaluateNode_(int nodeIdx) {
           out = !n.outputs.empty() ? (next_[n.outputs[0]] != 0) : false;
         }
         else if (S && R) out = true;
-      }
-      break;
+      } break;
+    }
     // Reset dominant
-    case Program::Node::RS_:
+    case Program::Node::RS_:{
       for (int s : n.inputs) {   
         bool S = (next_[n.inputs[0]] != 0);
         bool R = (next_[n.inputs[1]] != 0);
@@ -209,19 +282,85 @@ bool Simulator::evaluateNode_(int nodeIdx) {
         else if (!S && !R){
           out = !n.outputs.empty() ? (next_[n.outputs[0]] != 0) : false;
         }
+      } break;
+    }
+    case Program::Node::TON_: {
+      if (n.inputs.empty()) {
+        out = false;
+        break;
       }
-      break;
-
+      // Get input signal value
+      int inputSig = n.inputs[0];
+      if (inputSig < 0 || inputSig >= static_cast<int>(next_.size())) {
+        out = false;
+        break;
+      }
+      bool inputActive = (next_[inputSig] != 0);
+      float presetTime = getPresetTime(n.name);
+      bool status = getTGateStatus(n.name);
+      float elapsed = 0.0f;
+      auto it = timerElapsedTime.find(n.name);
+      if (it != timerElapsedTime.end()){
+        elapsed = it->second;
+      }
+      if(inputActive && status){
+        out = true;
+      }
+      if (!inputActive && status){
+        setTGateStatus(n.name, false);
+        timerElapsedTime[n.name] = 0.0f;
+        // if want impulse say out = true;
+      }
+      if (!inputActive){
+        //timer that saves it state???
+        timerElapsedTime[n.name] = 0.0f;
+      }
+      if (inputActive && !status){
+        out = false;
+      }
+    } break;
+    case Program::Node::TOF_: {
+      if (n.inputs.empty()) {
+        out = false;
+        break;
+      }
+      // Get input signal value
+      int inputSig = n.inputs[0];
+      if (inputSig < 0 || inputSig >= static_cast<int>(next_.size())) {
+        out = false;
+        break;
+      }
+      bool inputActive = (next_[inputSig] != 0);
+      // Get preset time and status
+      float presetTime = getPresetTime(n.name);
+      bool status = getTGateStatus(n.name);
+      // Get elapsed time for this timer
+      float elapsed = 0.0f;
+      auto it = timerElapsedTime.find(n.name);
+      if (it != timerElapsedTime.end()) {
+        elapsed = it->second;
+      }
+      if (inputActive) {
+        // Input is high - output is high immediately
+        out = true;
+        setTGateStatus(n.name, true);
+      } else if (elapsed >= presetTime) {
+          out = false;
+          setTGateStatus(n.name, false);
+        } else if (!inputActive && getTGateStatus(n.name)){
+          out = true;
+        } else {
+          out = false;
+        }
+    } break;
     case Program::Node::BTN: {
       bool m = momentary_[nodeIdx];
       bool l = latch_[nodeIdx];
       out = m || l;
     } break;
-    
     default:
       break;
   }
-  
   for (int outputSig : n.outputs) {
     next_[outputSig] = out ? 1 : 0;
   }

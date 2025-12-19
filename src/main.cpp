@@ -15,7 +15,6 @@ int main(int argc, char** argv) {
   auto prog = std::make_unique<Program>();
   const char* fPath = argv[1];
   prog->lastModifiedAt = std::filesystem::last_write_time(fPath);
-  printf("%d\n", prog->lastModifiedAt.time_since_epoch().count());
   auto res = parseFile(argv[1], *prog);
   if (!res.ok) {
     fprintf(stderr, "Parse error: %s\n", res.msg.c_str());

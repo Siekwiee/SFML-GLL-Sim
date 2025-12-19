@@ -1,0 +1,14 @@
+# Timer Gates Example
+# Demonstrates TON (Timer On Delay) and TOF (Timer Off Delay) gates
+# Use the sidebar to set preset times (PT) for each timer
+
+IN start, stop
+OUT delayed_on, delayed_off
+
+# TON: Output goes HIGH after input has been HIGH for preset time
+TON delay_on(start) -> x
+
+# TOF: Output stays HIGH for preset time after input goes LOW
+TOF delay_off(stop) -> delayed_off
+
+

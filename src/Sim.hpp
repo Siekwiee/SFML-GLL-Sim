@@ -10,16 +10,19 @@ struct Simulator {
   // BTN control hooks
   void setMomentary(const std::string& btnName, bool down);
   void toggleLatch(const std::string& btnName);
-  
-  // Direct signal control (for IN signals without BTN nodes)
-  void toggleSignal(const std::string& signalName);
-  void setSignal(const std::string& signalName, bool value);
-  
   // Query BTN state
   bool isButtonPressed(const std::string& btnName) const;
   bool isButtonLatched(const std::string& btnName) const;
   bool getSignalValue(const std::string& signalName) const;
-
+  // Present time control hook, getter and status
+  void setPresetTime(const std::string& gateName, float seconds);
+  float getPresetTime(const std::string& gateName);
+  bool getTGateStatus(const std::string& gateName);
+  void setTGateStatus(const std::string& gateName, bool status);
+  // Direct signal control (for IN signals without BTN nodes)
+  void toggleSignal(const std::string& signalName);
+  void setSignal(const std::string& signalName, bool value);
+  
   const std::vector<uint8_t>& signals() const { return cur_; }
   int currentEvaluatingLine() const { return curLine_; }
   int currentEvaluatingNode() const { return curNodeIdx_; }
@@ -39,6 +42,9 @@ private:
   bool stepping_ = false;     // Are we in the middle of a slow-step cycle?
   bool hasCycles_ = false;   // Whether the circuit has cycles
   std::unordered_map<int, bool> latch_, momentary_; // by node index
+  std::unordered_map<std::string, uint8_t> presentTimeSeconds;
+  std::unordered_map<std::string, bool> nodeStatus;
+  std::unordered_map<std::string, float> timerElapsedTime; // Elapsed time for each timer (in seconds)
 
   void stepOnce_();           // Full step (all nodes at once)
   void stepOneNode_();        // Step single node (for visualization)
