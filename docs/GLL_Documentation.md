@@ -64,6 +64,22 @@ OR gate2(a, b) -> c
 | 1 | 0 | 1 |
 | 1 | 1 | 1 |
 
+#### `XOR`
+
+The `XOR` gate is used to compute the logical `XOR` of its inputs. The output is `true` if the inputs are different, and `false` if the inputs are the same.
+
+```
+XOR gate2(a, b) -> c
+```
+
+**Truth table**:
+| A | B | C |
+| --- | --- | --- |
+| 0 | 0 | 0 |
+| 0 | 1 | 1 |
+| 1 | 0 | 1 |
+| 1 | 1 | 0 |
+
 #### `NOT`
 
 The `NOT` gate is used to compute the logical `NOT` of its input. The output is `true` if the input is `false`, and `false` if the input is `true`. Basically, it inverts the input signal. A `NOT` gate should be defined inline as in the example below.
