@@ -8,7 +8,11 @@
 - Added support for TON/TOF nodes with hardcoded preset times in Gll
 - Uniformised time parsing in UI and Gll
 - Added millisecond support
-- CTU work in progress
+- Implemented CTU (Counter Up) and CTD (Counter Down) nodes
+- Added support for hardcoded PV/CV arguments in CTU/CTD
+- Added UI widgets for viewing and editing counter PV/CV values
+- Fixed castSignalToBool\_ returning true for all valid signal indices regardless of value
+- Updated GLL_Documentation.md with CTU/CTD details
 - Added Scrolling behavior to the code part
 
 ## 0.0.3 - 2025-12-20

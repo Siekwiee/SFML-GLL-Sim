@@ -1,4 +1,4 @@
 IN input, reset
 OUT output
 
-CTU output(input) -> output
+CTU myCounter("10", input, reset) -> output

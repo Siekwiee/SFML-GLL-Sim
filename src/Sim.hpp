@@ -19,6 +19,13 @@ struct Simulator {
   float getPresetTime(const std::string& gateName);
   bool getTGateStatus(const std::string& gateName);
   void setTGateStatus(const std::string& gateName, bool status);
+
+  // Counter control hooks
+  void setPresetCounterValue(const std::string& gateName, int value);
+  int getPresetCounterValue(const std::string& gateName);
+  void setCurrentCounterValue(const std::string& gateName, int value);
+  int getCurrentCounterValue(const std::string& gateName);
+
   // Direct signal control (for IN signals without BTN nodes)
   void toggleSignal(const std::string& signalName);
   void setSignal(const std::string& signalName, bool value);
@@ -48,6 +55,10 @@ private:
   std::unordered_map<std::string, float> presentTimeSeconds;
   std::unordered_map<std::string, bool> nodeStatus;
   std::unordered_map<std::string, float> timerElapsedTime; // Elapsed time for each timer (in seconds)
+  
+  std::unordered_map<std::string, int> presetCounterValue;
+  std::unordered_map<std::string, int> currentCounterValue;
+  std::unordered_map<std::string, bool> counterPrevInput;
 
   void stepOnce_();           // Full step (all nodes at once)
   void stepOneNode_();        // Step single node (for visualization)
@@ -57,7 +68,7 @@ private:
     if (sigIdx < 0 || sigIdx >= static_cast<int>(next_.size())) {
         return false;
       } else {
-        return true;
+        return (next_[sigIdx] != 0);
       }
   };
   bool evaluateNode_(int nodeIdx);  // Evaluate a single node

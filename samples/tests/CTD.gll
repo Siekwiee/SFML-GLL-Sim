@@ -1,0 +1,4 @@
+IN input, reset
+OUT output
+
+CTD myCounter("3", input, reset) -> output

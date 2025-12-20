@@ -224,6 +224,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::TOF_;
     } else if (gateType == "CTU") {
       type = Program::Node::CTU_;
+    } else if (gateType == "CTD") {
+      type = Program::Node::CTD_;
     } else if (gateType == "BTN") {
       type = Program::Node::BTN;
     } else {
@@ -291,22 +293,40 @@ ParseResult parseFile(const std::string& path, Program& out) {
       
       // Now split by comma and add non-internal signals
       auto argList = split(processed, ',');
-      bool isFirstArg = true;
+      int argIdx = 0;
       for (const auto& arg : argList) {
         // Special handling for TON/TOF first argument as hardcoded time
-        if (isFirstArg && (type == Program::Node::TON_ || type == Program::Node::TOF_)) {
-          isFirstArg = false;
+        if (argIdx == 0 && (type == Program::Node::TON_ || type == Program::Node::TOF_)) {
           // Check if it's a quoted string or looks like a time (starts with digit)
-          if ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front()))) {
+          if (!arg.empty() && ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front())))) {
             std::string timeStr = arg;
             if (timeStr.front() == '"') {
                 timeStr = timeStr.substr(1, timeStr.length() - 2);
             }
             node.hardcodedPresetTime = parseTimeStringToFloat(timeStr);
+            argIdx++;
             continue; // Skip adding this as a signal input
           }
         }
 
+        // Special handling for CTU/CTD arguments (PV)
+        if (argIdx == 0 && (type == Program::Node::CTU_ || type == Program::Node::CTD_)) {
+          if (!arg.empty() && ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front())) || (arg.size() > 1 && arg.front() == '-'))) {
+            std::string valStr = arg;
+            if (valStr.front() == '"') valStr = valStr.substr(1, valStr.length() - 2);
+            try {
+              // Try to parse as int
+              int val = std::stoi(valStr);
+              node.hardcodedPresetValue = val;
+              argIdx++;
+              continue;
+            } catch (...) {
+              // If not a number, fall through to signal handling
+            }
+          }
+        }
+
+        argIdx++;
         inputSymbols.push_back(arg);
         int sigId = getOrCreateSignal(out, arg);
         inputs.push_back(sigId);

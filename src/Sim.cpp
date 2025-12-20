@@ -30,10 +30,18 @@ Simulator::Simulator(const Program& p) : prog_(p) {
     hasCycles_ = true;
   }
 
-  // Initialize hardcoded preset times for TON/TOF nodes
+  // Initialize hardcoded preset times and counter values
   for (const auto& node : prog_.nodes) {
     if ((node.type == Program::Node::TON_ || node.type == Program::Node::TOF_) && node.hardcodedPresetTime > 0.0f) {
       setPresetTime(node.name, node.hardcodedPresetTime);
+    }
+    if (node.type == Program::Node::CTU_ || node.type == Program::Node::CTD_) {
+      if (node.hardcodedPresetValue >= 0) {
+        setPresetCounterValue(node.name, node.hardcodedPresetValue);
+        if (node.type == Program::Node::CTD_) {
+          setCurrentCounterValue(node.name, node.hardcodedPresetValue);
+        }
+      }
     }
   }
 }
@@ -238,6 +246,25 @@ bool Simulator::getTGateStatus(const std::string& gateName) {
 void Simulator::setTGateStatus(const std::string& gateName, bool status) {
   nodeStatus[gateName] = status;
 }
+
+void Simulator::setPresetCounterValue(const std::string& gateName, int value) {
+  presetCounterValue[gateName] = value;
+}
+
+int Simulator::getPresetCounterValue(const std::string& gateName) {
+  if (presetCounterValue.count(gateName) > 0) return presetCounterValue[gateName];
+  return 0;
+}
+
+void Simulator::setCurrentCounterValue(const std::string& gateName, int value) {
+  currentCounterValue[gateName] = value;
+}
+
+int Simulator::getCurrentCounterValue(const std::string& gateName) {
+  if (currentCounterValue.count(gateName) > 0) return currentCounterValue[gateName];
+  return 0;
+}
+
 void Simulator::toggleSignal(const std::string& signalName) {
   auto it = prog_.symbolToSignal.find(signalName);
   if (it != prog_.symbolToSignal.end()) {
@@ -405,16 +432,61 @@ bool Simulator::evaluateNode_(int nodeIdx) {
         }
       break;}
     case Program::Node::CTU_: {
-      if (n.inputs.empty()) {
+      if (n.inputs.size() < 2) {
         out = false;
         break;
       }
-      // Get input signal value
-      int inputSig = n.inputs[0];
-      bool inputActive = castSignalToBool_(inputSig);
-      printf("inputActive: %d\n", inputActive);
-
-      break;}
+      // CTU(PV, CV, CU, R) -> Q
+      // In Parser, if PV and CV were hardcoded, they are skipped from inputs.
+      // So inputs[0] is CU, inputs[1] is R.
+      bool cu = castSignalToBool_(n.inputs[0]);
+      bool reset = castSignalToBool_(n.inputs[1]);
+      
+      int cv = getCurrentCounterValue(n.name);
+      int pv = getPresetCounterValue(n.name);
+      bool prevCu = counterPrevInput[n.name];
+      
+      if (reset) {
+        cv = 0;
+      } else if (cu && !prevCu) {
+        // Positive edge on CU
+        if (cv < 32767) {
+          cv++;
+        }
+      }
+      
+      setCurrentCounterValue(n.name, cv);
+      counterPrevInput[n.name] = cu;
+      out = (cv >= pv);
+      break;
+    }
+    case Program::Node::CTD_: {
+      if (n.inputs.size() < 2) {
+        out = false;
+        break;
+      }
+      // CTD(PV, CD, LD) -> Q
+      bool cd = castSignalToBool_(n.inputs[0]);
+      bool load = castSignalToBool_(n.inputs[1]);
+      
+      int cv = getCurrentCounterValue(n.name);
+      int pv = getPresetCounterValue(n.name);
+      bool prevCd = counterPrevInput[n.name];
+      
+      if (load) {
+        cv = pv;
+      } else if (cd && !prevCd) {
+        // Positive edge on CD
+        if (cv > 0) {
+          cv--;
+        }
+      }
+      
+      setCurrentCounterValue(n.name, cv);
+      counterPrevInput[n.name] = cd;
+      out = (cv <= 0);
+      break;
+    }
     case Program::Node::BTN: {
       bool m = momentary_[nodeIdx];
       bool l = latch_[nodeIdx];

@@ -204,14 +204,47 @@ TOF delay_off(stop) -> delayed_output
 - Timer expires (PT duration) → Output goes LOW
 - Input goes HIGH again before timer expires → Timer resets, output stays HIGH
 
-#### `CTU` (Work In Progress)
+#### `CTU`
 
-The `CTU` gate is a count-up timer.
+The `CTU` gate is a count-up counter. It increases its current value (CV) on every positive edge of the count-up (CU) input signal. When CV is greater than or equal to the preset value (PV), the output (Q) goes HIGH.
 
-- Inputs: `CU` (count up), `R` (reset), `PV` (preset value)
-- Outputs: `Q` (done), `CV` (current value)
+- Inputs: `CU` (count up), `R` (reset)
+- Outputs: `Q` (done)
+- Configurable Variables: `PV` (Preset Value) which can be edited in the UI sidebar by clicking the counter widget, or **hardcoded** in the GLL file as the first argument. `CV` (Current Value) is internal and updated automatically.
 
-_Note: Implementation is currently incomplete._
+**Hardcoded Example**:
+
+```
+# Fixed PV of 10
+CTU myCounter("10", input, reset) -> done
+```
+
+**Behavior**:
+
+- Positive edge on `CU` → `CV` increases by 1 (max 32767)
+- `R` is HIGH → `CV` resets to 0
+- `CV >= PV` → `Q` is HIGH, otherwise LOW
+
+#### `CTD`
+
+The `CTD` gate is a count-down counter. It decreases its current value (CV) on every positive edge of the count-down (CD) input signal. When CV is less than or equal to 0, the output (Q) goes HIGH.
+
+- Inputs: `CD` (count down), `LD` (load)
+- Outputs: `Q` (done)
+- Configurable Variables: `PV` (Preset Value) which can be edited in the UI sidebar by clicking the counter widget, or **hardcoded** in the GLL file as the first argument. `CV` (Current Value) is internal and updated automatically.
+
+**Hardcoded Example**:
+
+```
+# Fixed PV of 5
+CTD myCounter("5", input, load) -> done
+```
+
+**Behavior**:
+
+- Positive edge on `CD` → `CV` decreases by 1 (stops at 0)
+- `LD` is HIGH → `CV` is set to `PV`
+- `CV <= 0` → `Q` is HIGH, otherwise LOW
 
 #### `BTN` (Work In Progress)
 

@@ -78,6 +78,11 @@ private:
   std::unordered_map<std::string, std::string> timerTextInputs_;
   std::string activeTimerWidget_; 
   bool isEditingTimer_ = false;  
+  // Counter widget positions
+  std::unordered_map<std::string, sf::FloatRect> counterWidgets_;
+  std::unordered_map<std::string, std::string> counterPVTextInputs_;
+  std::string activeCounterWidget_;
+  bool isEditingCounter_ = false;
   // Input signal widgets (auto-generated for IN signals without explicit BTN)
   std::unordered_map<std::string, sf::FloatRect> inputWidgets_;
   
@@ -90,6 +95,7 @@ private:
   void drawLineHighlight(sf::RenderWindow& win);
   void drawBTNWidgets(sf::RenderWindow& win);
   void drawTimerWidgets(sf::RenderWindow& win);
+  void drawCounterWidgets(sf::RenderWindow& win);
   sf::Color getSignalColor(int signalId) const;
   void updateBTNWidgets();
   bool isPointInRect(const sf::Vector2f& point, const sf::FloatRect& rect) const;

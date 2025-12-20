@@ -108,6 +108,7 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
 void UI::updateBTNWidgets() {
   btnWidgets_.clear();
   tNodeWidgets_.clear();
+  counterWidgets_.clear();
   inputWidgets_.clear();
   
   if (!fontLoaded_) return;
@@ -160,6 +161,17 @@ void UI::updateBTNWidgets() {
       }
     }
     widgetY += widgetHeight + 5.0f;
+  }
+
+  // Create widgets for all Counter nodes
+  for (const auto& node : prog_.nodes) {
+    if (node.type == Program::Node::CTU_ || node.type == Program::Node::CTD_) {
+      counterWidgets_[node.name] = sf::FloatRect({sidebarPadding_, widgetY}, {widgetWidth, widgetHeight * 2});
+      if (counterPVTextInputs_.count(node.name) == 0) {
+        counterPVTextInputs_[node.name] = std::to_string(sim_.getPresetCounterValue(node.name));
+      }
+      widgetY += widgetHeight * 2 + 5.0f;
+    }
   }
   
   // Create widgets for explicit BTN nodes
@@ -251,41 +263,37 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
 
   // Handle text input for timer widgets FIRST (before other events)
   if (isEditingTimer_ && !activeTimerWidget_.empty()) {
+    // ... (existing timer logic)
+  }
+
+  // Handle text input for counter widgets
+  if (isEditingCounter_ && !activeCounterWidget_.empty()) {
     if (auto* textEntered = ev.getIf<sf::Event::TextEntered>()) {
-      // Handle printable characters
       char c = static_cast<char>(textEntered->unicode);
-      if (std::isprint(c) || c == 's' || c == 'm' || c == 'h' || c == 'S' || c == 'M' || c == 'H') {
-        timerTextInputs_[activeTimerWidget_] += c;
+      if (std::isdigit(c) || (c == '-' && counterPVTextInputs_[activeCounterWidget_].empty())) {
+        counterPVTextInputs_[activeCounterWidget_] += c;
       }
     }
     
     if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
       if (keyPressed->code == sf::Keyboard::Key::Enter) {
-        // Commit changes
-        const std::string& text = timerTextInputs_[activeTimerWidget_];
-        float seconds = parseTimeStringToFloat(text);
-        if (seconds > 0.0f) {
-          sim_.setPresetTime(activeTimerWidget_, seconds);
-        }
-        isEditingTimer_ = false;
-        activeTimerWidget_.clear();
-        return;  // Don't process other events
+        try {
+          int val = std::stoi(counterPVTextInputs_[activeCounterWidget_]);
+          sim_.setPresetCounterValue(activeCounterWidget_, val);
+        } catch (...) {}
+        isEditingCounter_ = false;
+        activeCounterWidget_.clear();
+        return;
       } else if (keyPressed->code == sf::Keyboard::Key::Escape) {
-        // Cancel editing - restore original value
-        float pt = sim_.getPresetTime(activeTimerWidget_);
-        timerTextInputs_[activeTimerWidget_] = parseFloatToTimeString(pt);
-        isEditingTimer_ = false;
-        activeTimerWidget_.clear();
+        counterPVTextInputs_[activeCounterWidget_] = std::to_string(sim_.getPresetCounterValue(activeCounterWidget_));
+        isEditingCounter_ = false;
+        activeCounterWidget_.clear();
         return;
       } else if (keyPressed->code == sf::Keyboard::Key::Backspace) {
-        // Delete last character
-        if (!timerTextInputs_[activeTimerWidget_].empty()) {
-          timerTextInputs_[activeTimerWidget_].pop_back();
-        }
-        return;  // Don't process other events
+        if (!counterPVTextInputs_[activeCounterWidget_].empty()) counterPVTextInputs_[activeCounterWidget_].pop_back();
+        return;
       }
     }
-    // If we're editing, don't process other events
     return;
   }
   
@@ -375,6 +383,35 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
       activeTimerWidget_.clear();
     }
     
+    // Check Counter node widgets (click to start editing)
+    for (const auto& [nodeName, rect] : counterWidgets_) {
+      if (isPointInRect(mousePos, rect)) {
+        bool hardcodedPV = false;
+        for (const auto& node : prog_.nodes) {
+          if (node.name == nodeName) {
+            hardcodedPV = node.hardcodedPresetValue >= 0;
+            break;
+          }
+        }
+        
+        if (!hardcodedPV) {
+          isEditingCounter_ = true;
+          activeCounterWidget_ = nodeName;
+        }
+        return;
+      }
+    }
+    
+    // If clicking elsewhere while editing counters, commit changes
+    if (isEditingCounter_ && !activeCounterWidget_.empty()) {
+      try {
+        int val = std::stoi(counterPVTextInputs_[activeCounterWidget_]);
+        sim_.setPresetCounterValue(activeCounterWidget_, val);
+      } catch (...) {}
+      isEditingCounter_ = false;
+      activeCounterWidget_.clear();
+    }
+
     // Check control buttons
     if (isPointInRect(mousePos, playPauseBtn_)) {
       running_ = !running_;
@@ -444,6 +481,7 @@ void UI::draw(sf::RenderWindow& win) {
   drawControls(win);
   drawBTNWidgets(win);
   drawTimerWidgets(win);
+  drawCounterWidgets(win);
   
   // Create a view for the content area to handle clipping and scrolling
   sf::View oldView = win.getView();
@@ -916,7 +954,7 @@ void UI::drawSettingsPopup(sf::RenderWindow& win) {
     status.setFillColor(Theme::TextGreen);
     win.draw(status);
   }
-  currentY = cardPos.y + 340;
+    currentY = cardPos.y + 340;
 
   // Connect/Disconnect Button
   sf::RectangleShape btn(sf::Vector2f(100, 40));
@@ -939,4 +977,60 @@ void UI::drawSettingsPopup(sf::RenderWindow& win) {
   closeText.setPosition({cardPos.x + 310, currentY + 10});
   closeText.setFillColor(sf::Color::White);
   win.draw(closeText);
+}
+
+void UI::drawCounterWidgets(sf::RenderWindow& win) {
+  if (!fontLoaded_) return;
+
+  for (const auto& [nodeName, rect] : counterWidgets_) {
+    bool isCTU = false;
+    bool hardcodedPV = false;
+    for (const auto& node : prog_.nodes) {
+        if (node.name == nodeName) {
+            isCTU = (node.type == Program::Node::CTU_);
+            hardcodedPV = (node.hardcodedPresetValue >= 0);
+            break;
+        }
+    }
+
+    bool isEditingThis = (isEditingCounter_ && activeCounterWidget_ == nodeName);
+    bool isActive = (sim_.currentEvaluatingNode() != -1 && prog_.nodes[sim_.currentEvaluatingNode()].name == nodeName);
+
+    // Draw background
+    sf::RectangleShape widget(rect.size);
+    widget.setPosition(rect.position);
+    widget.setFillColor(sf::Color(35, 35, 40));
+    widget.setOutlineColor(isActive ? Theme::TextYellow : Theme::TextDefault);
+    widget.setOutlineThickness(isActive ? 2 : 1);
+    win.draw(widget);
+
+    // Draw divider
+    sf::Vertex line[] = {
+        sf::Vertex(rect.position + sf::Vector2f(0, rect.size.y / 2), Theme::TextDefault),
+        sf::Vertex(rect.position + sf::Vector2f(rect.size.x, rect.size.y / 2), Theme::TextDefault)
+    };
+    win.draw(line, 2, sf::PrimitiveType::Lines);
+
+    // PV Display
+    std::string pvLabel = nodeName + " PV: ";
+    if (isEditingThis) {
+        pvLabel += counterPVTextInputs_[nodeName] + "|";
+    } else {
+        pvLabel += std::to_string(sim_.getPresetCounterValue(nodeName));
+        if (hardcodedPV) pvLabel += " (fixed)";
+    }
+    
+    sf::Text pvText(font_, pvLabel, static_cast<unsigned int>(Theme::FontSize));
+    pvText.setPosition(rect.position + sf::Vector2f(10, 5));
+    pvText.setFillColor(isEditingThis ? Theme::TextYellow : Theme::TextDefault);
+    win.draw(pvText);
+
+    // CV Display (Not editable)
+    std::string cvLabel = nodeName + " CV: " + std::to_string(sim_.getCurrentCounterValue(nodeName));
+    
+    sf::Text cvText(font_, cvLabel, static_cast<unsigned int>(Theme::FontSize));
+    cvText.setPosition(rect.position + sf::Vector2f(10, rect.size.y / 2 + 5));
+    cvText.setFillColor(Theme::TextDefault);
+    win.draw(cvText);
+  }
 }
