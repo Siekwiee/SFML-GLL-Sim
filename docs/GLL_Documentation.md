@@ -201,3 +201,17 @@ example:
 ```
 AND gate1(a, b) -> c, d
 ```
+
+#### Aliasing
+
+Aliases can be used to give a signal a more readable name. This is useful for readability and for debugging.
+
+example:
+
+```
+IN INPUT_0(atEntry), INPUT_1(atLoad), INPUT_2(atLeft), INPUT_3(atRight)
+OUT OUTPUT_0(entryConv), OUTPUT_1(loadConv), OUTPUT_2(forksL), OUTPUT_3(forksR)
+
+AND Step1(atEntry, atLoad) -> entryConv
+OR Step2(atLeft, atRight) -> forksL, forksR, loadConv
+```

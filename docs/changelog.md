@@ -2,7 +2,7 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
-## 0.0.3 - 2025-12-x
+## 0.0.3 - 2025-12-20
 
 - Reversed to having a basic PLC single-pass scan from top to bottom without any fancy ready checks nor sorting.
 - Added forward reference detection
@@ -11,6 +11,10 @@
 - Added support for higher frequencies (UNTESTED)
 - Added ModBus Client Support
 - Added FactoryIO A-To-B GLL example
+- Added alias support for inputs and outputs see [Aliasing](docs/GLL_Documentation.md#aliasing)
+- Hardened font loading and added fallback
+- Capped max sim speed at 2000 Hz for now
+- Added XOR gate support see [XOR-Gate](docs/GLL_Documentation.md#xor)
 
 ## 0.0.2 - 2025-12-19
 
