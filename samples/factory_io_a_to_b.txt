@@ -6,9 +6,8 @@
 # OUTPUT_0 : Conveyor motor
 #
 # Logic: Run the conveyor if Factory IO is running AND the part hasn't reached the sensor yet.
-IN INPUT_0, INPUT_1
-OUT OUTPUT_0
+IN INPUT_0(Sensor), INPUT_1
+OUT OUTPUT_0(Coil_0)
 
 
-AND g2(INPUT_0, INPUT_1) -> OUTPUT_0
-
+AND Step1(Sensor, INPUT_1) -> Coil_0

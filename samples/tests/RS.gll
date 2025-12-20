@@ -1,0 +1,5 @@
+IN set, reset
+OUT out
+
+# Reset dominant variant
+RS Step1(set, reset) -> out

@@ -1,0 +1,4 @@
+IN a, b
+OUT c
+
+XOR g1(a,b) -> c

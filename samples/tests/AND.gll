@@ -1,0 +1,4 @@
+IN a, b
+OUT c
+
+AND Step1(a, b) -> c

@@ -279,16 +279,20 @@ bool Simulator::evaluateNode_(int nodeIdx) {
       for (int s : n.inputs) {
         bool sigVal = (next_[s] != 0);
         out = out && sigVal;
-      }
-      break;
-    }
+      } break;}
     case Program::Node::OR_:{
       out = false;
       for (int s : n.inputs) {
         bool sigVal = (next_[s] != 0);
         out = out || sigVal;
-      } break;
-    }
+      } break;}
+    case Program::Node::XOR_:{
+      out = false;
+      for (int s : n.inputs){
+        bool sigVal = (next_[s] != 0);
+        if(out&&sigVal){ out = false; break;}
+        out = out || sigVal && !out && sigVal;
+      } break;}
     case Program::Node::NOT_:{
       if (!n.inputs.empty()) {
         bool sigVal = (next_[n.inputs[0]] != 0);
@@ -357,7 +361,8 @@ bool Simulator::evaluateNode_(int nodeIdx) {
       if (inputActive && !status){
         out = false;
       }
-    } break;
+      break;
+    }
     case Program::Node::TOF_: {
       if (n.inputs.empty()) {
         out = false;
@@ -391,12 +396,12 @@ bool Simulator::evaluateNode_(int nodeIdx) {
         } else {
           out = false;
         }
-    } break;
+      break;}
     case Program::Node::BTN: {
       bool m = momentary_[nodeIdx];
       bool l = latch_[nodeIdx];
       out = m || l;
-    } break;
+      break;}
     default:
       break;
   }

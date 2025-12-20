@@ -1,0 +1,4 @@
+IN a
+OUT b
+
+NOT Step1(a) -> b

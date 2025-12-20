@@ -209,6 +209,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::AND_;
     } else if (gateType == "OR") {
       type = Program::Node::OR_;
+    } else if (gateType == "XOR") {
+      type = Program::Node::XOR_;
     } else if (gateType == "NOT") {
       type = Program::Node::NOT_;
     } else if (gateType == "SR") {
