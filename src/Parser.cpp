@@ -297,8 +297,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
       for (const auto& arg : argList) {
         // Special handling for TON/TOF first argument as hardcoded time
         if (argIdx == 0 && (type == Program::Node::TON_ || type == Program::Node::TOF_)) {
-          // Check if it's a quoted string or looks like a time (starts with digit)
-          if (!arg.empty() && ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front())))) {
+          // Check if it's a quoted string or looks like a time (starts with digit or dot)
+          if (!arg.empty() && ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front())) || (arg.front() == '.'))) {
             std::string timeStr = arg;
             if (timeStr.front() == '"') {
                 timeStr = timeStr.substr(1, timeStr.length() - 2);

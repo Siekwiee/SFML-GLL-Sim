@@ -2,7 +2,11 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
-## 0.0.4 - 2025-12-x
+## 0.0.5 - 2025-12-x
+
+- add support for not full values delared with . to time nodes
+
+## 0.0.4 - 2025-12-20
 
 - Dynamic IO bit counts for Modbus configarable in settings, and auto-saved to disk
 - Added support for TON/TOF nodes with hardcoded preset times in Gll

@@ -1,4 +1,4 @@
 IN a
 OUT b
 
-TON Step1(a) -> b
+TON Step1(".5s",a) -> b
