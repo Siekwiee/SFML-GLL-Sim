@@ -1,0 +1,8 @@
+IN INPUT_0(iAtEntry), INPUT_1(iAtExit), INPUT_2(movingX), INPUT_3(movingZ), INPUT_4(iDetect), INPUT_5(start)
+OUT OUTPUT_0(entryConv), OUTPUT_1(exitConv), OUTPUT_2(movX), OUTPUT_3(movZ), OUTPUT_4(grab)
+
+SR entryConvSet(NOT(iAtEntry), NOT(iAtExit)) -> entryConv
+AND step1(NOT(entryConv), iAtEntry) -> x, movZ
+AND merge1(NOT(iDetect), x) -> mov
+AND step2(NOT(mov), iDetect) -> grab
+AND step3(NOT(mov), grab) -> movZ

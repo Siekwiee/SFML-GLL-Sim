@@ -148,7 +148,7 @@ The `TON` gate is a timer on delay. When the input goes HIGH, the timer starts c
 
 - Outputs: `Q`
 
-- Preset Time (PT): Configured in the UI sidebar for each TON gate. Click the timer widget to edit. Supports formats like `10s` (seconds), `2m` (minutes), `1h` (hours).
+- Preset Time (PT): Configured in the UI sidebar for each TON gate. Click the timer widget to edit. Supports formats like `500ms` (milliseconds), `10s` (seconds), `2m` (minutes), `1h` (hours).
 
 example:
 

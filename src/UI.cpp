@@ -1,4 +1,5 @@
 #include "UI.hpp"
+#include "TimeUtils.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -16,6 +17,8 @@ UI::UI(const Program& prog, Simulator& sim, ModbusManager& modbus)
   ipInput_ = modbus_.getIp();
   portInput_ = std::to_string(modbus_.getPort());
   slaveIdInput_ = std::to_string(modbus_.getSlaveId());
+  numInputsInput_ = std::to_string(modbus_.getNumInputs());
+  numOutputsInput_ = std::to_string(modbus_.getNumOutputs());
 
   // Layout will be updated when window size is known
   // Default initialization
@@ -102,48 +105,6 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
   // Update BTN widgets
   updateBTNWidgets();
 }
-static float parseTimeStringToFloat(const std::string& timeString){
-  if (timeString.empty()){
-    return 3.0f;
-  } else{
-    // parse number (amount of time)
-    size_t end = 0;
-    while (end < timeString.size() && (std::isdigit(timeString[end]) || timeString[end] == '.')){
-      end++;
-    }
-    if (end == 0) return 3.0f;  // No number found, return default
-    float number = std::stof(timeString.substr(0, end));
-    // parse format (s seconds, m minutes, h hours)
-    if(end < timeString.size()){
-      char unit = std::tolower(timeString[end]);
-      if (unit =='m'){
-        return number * 60.0f;
-      } else if (unit =='h'){
-        return number * 3600.0f;
-      }
-    }
-    return number;
-  }
-}
-
-static std::string parseFloatToTimeString(float floatInSeconds){
-  if (floatInSeconds <= 0.0f){
-    return "3s";
-  }
-  
-  if (floatInSeconds >= 3600.0f && std::fmod(floatInSeconds, 3600.0f) < 0.01f) {
-    return std::to_string(static_cast<int>(floatInSeconds / 3600.0f)) + "h";
-  }
-
-  else if (floatInSeconds >= 60.0f && std::fmod(floatInSeconds, 60.0f) < 0.01f) {
-    return std::to_string(static_cast<int>(floatInSeconds / 60.0f)) + "m";
-  }
-
-  else {
-    return std::to_string(static_cast<int>(floatInSeconds)) + "s";
-  }
-}
-
 void UI::updateBTNWidgets() {
   btnWidgets_.clear();
   tNodeWidgets_.clear();
@@ -211,6 +172,13 @@ void UI::updateBTNWidgets() {
 }
 
 void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
+  // Handle window resize to fix scaling and click misalignment
+  if (auto* resized = ev.getIf<sf::Event::Resized>()) {
+    sf::FloatRect visibleArea({0.f, 0.f}, {static_cast<float>(resized->size.x), static_cast<float>(resized->size.y)});
+    win.setView(sf::View(visibleArea));
+    updateLayout(resized->size);
+  }
+
   // Handle settings popup events if open
   if (settingsOpen_) {
     if (auto* keyPressed = ev.getIf<sf::Event::KeyPressed>()) {
@@ -227,6 +195,8 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
         if (activeInputField_ == 0) target = &ipInput_;
         else if (activeInputField_ == 1) target = &portInput_;
         else if (activeInputField_ == 2) target = &slaveIdInput_;
+        else if (activeInputField_ == 3) target = &numInputsInput_;
+        else if (activeInputField_ == 4) target = &numOutputsInput_;
 
         if (target) {
           if (c == '\b') {
@@ -241,20 +211,20 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
     if (auto* mousePressed = ev.getIf<sf::Event::MouseButtonPressed>()) {
       sf::Vector2f mousePos(static_cast<float>(mousePressed->position.x), static_cast<float>(mousePressed->position.y));
       float cardWidth = 400.0f;
-      float cardHeight = 350.0f;
+      float cardHeight = 400.0f;
       sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
 
       // Check input fields
       activeInputField_ = -1;
-      for (int i = 0; i < 3; ++i) {
-        sf::FloatRect fieldRect({cardPos.x + 150, cardPos.y + 70 + i * 50 - 5}, {200, 30});
+      for (int i = 0; i < 5; ++i) {
+        sf::FloatRect fieldRect({cardPos.x + 150, cardPos.y + 70 + i * 40 - 5}, {200, 30});
         if (isPointInRect(mousePos, fieldRect)) {
           activeInputField_ = i;
         }
       }
 
       // Connect Button
-      sf::FloatRect connectBtnRect({cardPos.x + 20, cardPos.y + 250}, {100, 40});
+      sf::FloatRect connectBtnRect({cardPos.x + 20, cardPos.y + 340}, {100, 40});
       if (isPointInRect(mousePos, connectBtnRect)) {
         if (modbus_.isConnected()) {
           modbus_.disconnect();
@@ -263,13 +233,15 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
           try {
             modbus_.setPort(std::stoi(portInput_));
             modbus_.setSlaveId(std::stoi(slaveIdInput_));
+            modbus_.setNumInputs(std::stoi(numInputsInput_));
+            modbus_.setNumOutputs(std::stoi(numOutputsInput_));
           } catch (...) {}
           modbus_.connect();
         }
       }
 
       // Close Button
-      sf::FloatRect closeBtnRect({cardPos.x + 280, cardPos.y + 250}, {100, 40});
+      sf::FloatRect closeBtnRect({cardPos.x + 280, cardPos.y + 340}, {100, 40});
       if (isPointInRect(mousePos, closeBtnRect)) {
         settingsOpen_ = false;
       }
@@ -365,6 +337,21 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
     // Check T node widgets (click to start editing)
     for (const auto& [nodeName, rect] : tNodeWidgets_) {
       if (isPointInRect(mousePos, rect)) {
+        // Check if this node has a hardcoded preset time
+        bool hardcoded = false;
+        for (const auto& node : prog_.nodes) {
+          if (node.name == nodeName && node.hardcodedPresetTime > 0.0f) {
+            hardcoded = true;
+            break;
+          }
+        }
+        
+        if (hardcoded) {
+          // Maybe show a message or just don't allow editing
+          // For now, just don't allow editing
+          return;
+        }
+
         // Start editing this timer widget
         activeTimerWidget_ = nodeName;
         isEditingTimer_ = true;
@@ -750,6 +737,15 @@ void UI::drawTimerWidgets(sf::RenderWindow& win) {
   if (!fontLoaded_) return;  
   // Draw each timer widget
   for (const auto& [nodeName, rect] : tNodeWidgets_) {
+    // Check if this node has a hardcoded preset time
+    bool hardcoded = false;
+    for (const auto& node : prog_.nodes) {
+      if (node.name == nodeName && node.hardcodedPresetTime > 0.0f) {
+        hardcoded = true;
+        break;
+      }
+    }
+
     // Get timer status from simulator
     bool isActive = sim_.getTGateStatus(nodeName);
     
@@ -758,8 +754,7 @@ void UI::drawTimerWidgets(sf::RenderWindow& win) {
     if (isActive) {
       // Yellowish when active (timer is ticking)
       bgColor = sf::Color(220, 200, 100, 220);  // Yellowish
-    } 
-    if(!isActive) {
+    } else {
       // Grayish when inactive
       bgColor = sf::Color(70, 70, 75, 200);  // Dark grayish
     }
@@ -777,6 +772,13 @@ void UI::drawTimerWidgets(sf::RenderWindow& win) {
       widget.setOutlineColor(isActive ? Theme::TextYellow : Theme::TextDefault);
       widget.setOutlineThickness(isActive ? 2 : 1);
     }
+    
+    // If hardcoded, use a different style
+    if (hardcoded) {
+      widget.setOutlineColor(sf::Color(100, 100, 100, 150));
+      widget.setOutlineThickness(1);
+    }
+
     win.draw(widget);
     
     // Get the text to display
@@ -794,6 +796,7 @@ void UI::drawTimerWidgets(sf::RenderWindow& win) {
       label += displayText + "|";  // Cursor indicator
     } else {
       label += displayText;
+      if (hardcoded) label += " (fixed)";
     }
     
     // Draw text
@@ -827,7 +830,7 @@ void UI::drawSettingsPopup(sf::RenderWindow& win) {
 
   // Popup card
   float cardWidth = 400.0f;
-  float cardHeight = 350.0f;
+  float cardHeight = 400.0f;
   sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
 
   sf::RectangleShape card(sf::Vector2f(cardWidth, cardHeight));
@@ -861,12 +864,14 @@ void UI::drawSettingsPopup(sf::RenderWindow& win) {
     v.setFillColor(Theme::TextDefault);
     win.draw(v);
 
-    currentY += 50;
+    currentY += 40;
   };
 
   drawInput("IP Address:", ipInput_, 0);
   drawInput("Port:", portInput_, 1);
   drawInput("Slave ID:", slaveIdInput_, 2);
+  drawInput("Num Inputs:", numInputsInput_, 3);
+  drawInput("Num Outputs:", numOutputsInput_, 4);
 
   // Status message
   if (!modbus_.getLastError().empty()) {
@@ -880,7 +885,7 @@ void UI::drawSettingsPopup(sf::RenderWindow& win) {
     status.setFillColor(Theme::TextGreen);
     win.draw(status);
   }
-  currentY += 30;
+  currentY = cardPos.y + 340;
 
   // Connect/Disconnect Button
   sf::RectangleShape btn(sf::Vector2f(100, 40));

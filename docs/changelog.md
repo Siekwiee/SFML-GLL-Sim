@@ -2,6 +2,14 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
+## 0.0.4 - 2025-12-x
+
+- Dynamic IO bit counts for Modbus configarable in settings, and auto-saved to disk
+- Added support for TON/TOF nodes with hardcoded preset times in Gll
+- Uniformised time parsing in UI and Gll
+- Added millisecond support
+- CTU work in progress
+
 ## 0.0.3 - 2025-12-20
 
 - Reversed to having a basic PLC single-pass scan from top to bottom without any fancy ready checks nor sorting.
@@ -23,7 +31,7 @@ Added **TON** and **TOF** timer gates with interactive preset time (PT) configur
 - **TON** (Timer On Delay): Output goes HIGH after input has been HIGH for the preset time duration
 - **TOF** (Timer Off Delay): Output stays HIGH for the preset time duration after input goes LOW
 - Timer widgets appear in the sidebar for each TON/TOF gate
-- Click timer widgets to edit preset time (PT) - supports formats like `10s`, `2m`, `1h` (seconds, minutes, hours)
+- Click timer widgets to edit preset time (PT) - supports formats like `500ms`, `10s`, `2m`, `1h` (milliseconds, seconds, minutes, hours)
 - Timer widgets highlight yellowish when active (timer is ticking), grayish when inactive
 - Preset time can be configured at runtime through the UI sidebar
 

@@ -1,4 +1,5 @@
 #include "Parser.hpp"
+#include "TimeUtils.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -221,11 +222,16 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::TON_;
     } else if (gateType == "TOF") {
       type = Program::Node::TOF_;
+    } else if (gateType == "CTU") {
+      type = Program::Node::CTU_;
     } else if (gateType == "BTN") {
       type = Program::Node::BTN;
     } else {
       return {false, "Line " + std::to_string(lineNum + 1) + ": Unknown gate type: " + gateType};
     }
+
+    // Create node
+    Program::Node node;
 
     // Parse inputs (handle NOT(...) syntax)
     std::vector<int> inputs;
@@ -285,7 +291,22 @@ ParseResult parseFile(const std::string& path, Program& out) {
       
       // Now split by comma and add non-internal signals
       auto argList = split(processed, ',');
+      bool isFirstArg = true;
       for (const auto& arg : argList) {
+        // Special handling for TON/TOF first argument as hardcoded time
+        if (isFirstArg && (type == Program::Node::TON_ || type == Program::Node::TOF_)) {
+          isFirstArg = false;
+          // Check if it's a quoted string or looks like a time (starts with digit)
+          if ((arg.front() == '"' && arg.back() == '"') || (std::isdigit(arg.front()))) {
+            std::string timeStr = arg;
+            if (timeStr.front() == '"') {
+                timeStr = timeStr.substr(1, timeStr.length() - 2);
+            }
+            node.hardcodedPresetTime = parseTimeStringToFloat(timeStr);
+            continue; // Skip adding this as a signal input
+          }
+        }
+
         inputSymbols.push_back(arg);
         int sigId = getOrCreateSignal(out, arg);
         inputs.push_back(sigId);
@@ -331,7 +352,6 @@ ParseResult parseFile(const std::string& path, Program& out) {
     }
 
     // Create node
-    Program::Node node;
     node.type = type;
     node.name = name;
     node.inputs = inputs;

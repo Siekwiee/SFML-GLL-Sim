@@ -42,7 +42,9 @@ private:
   std::string ipInput_;
   std::string portInput_;
   std::string slaveIdInput_;
-  int activeInputField_ = -1; // 0=IP, 1=Port, 2=SlaveID
+  std::string numInputsInput_;
+  std::string numOutputsInput_;
+  int activeInputField_ = -1; // 0=IP, 1=Port, 2=SlaveID, 3=NumInputs, 4=NumOutputs
   
   // Mouse state
   bool mouseDown_ = false;

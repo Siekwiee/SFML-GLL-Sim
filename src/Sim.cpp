@@ -29,6 +29,13 @@ Simulator::Simulator(const Program& p) : prog_(p) {
     }
     hasCycles_ = true;
   }
+
+  // Initialize hardcoded preset times for TON/TOF nodes
+  for (const auto& node : prog_.nodes) {
+    if ((node.type == Program::Node::TON_ || node.type == Program::Node::TOF_) && node.hardcodedPresetTime > 0.0f) {
+      setPresetTime(node.name, node.hardcodedPresetTime);
+    }
+  }
 }
 
 void Simulator::commitPendingInputs_() {
@@ -211,12 +218,12 @@ bool Simulator::isButtonLatched(const std::string& btnName) const {
 }
 
 void Simulator::setPresetTime(const std::string& gateName, float seconds) {
-  presentTimeSeconds[gateName] = static_cast<uint8_t>(std::clamp(seconds, 0.0f, 255.0f));
+  presentTimeSeconds[gateName] = seconds;
 }
 float Simulator::getPresetTime(const std::string& gateName){
   auto it = presentTimeSeconds.find(gateName);
   if (it != presentTimeSeconds.end()){
-    return static_cast<float>(it->second);
+    return it->second;
   }
   return 3.0f;
 }
@@ -396,6 +403,17 @@ bool Simulator::evaluateNode_(int nodeIdx) {
         } else {
           out = false;
         }
+      break;}
+    case Program::Node::CTU_: {
+      if (n.inputs.empty()) {
+        out = false;
+        break;
+      }
+      // Get input signal value
+      int inputSig = n.inputs[0];
+      bool inputActive = castSignalToBool_(inputSig);
+      printf("inputActive: %d\n", inputActive);
+
       break;}
     case Program::Node::BTN: {
       bool m = momentary_[nodeIdx];

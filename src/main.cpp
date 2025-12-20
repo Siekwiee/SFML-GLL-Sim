@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
   // Create fullscreen window (borderless)
   auto fsModes = sf::VideoMode::getFullscreenModes();
   sf::RenderWindow win(fsModes[0], "GLLSimulator", sf::Style::Default);
+  win.setView(sf::View(sf::FloatRect({0.f, 0.f}, {static_cast<float>(win.getSize().x), static_cast<float>(win.getSize().y)})));
   win.setFramerateLimit(60);
   win.setTitle("GLL - " + std::filesystem::path(fPath).filename().string());
   auto ui = std::make_unique<UI>(*prog, *sim, *modbus);

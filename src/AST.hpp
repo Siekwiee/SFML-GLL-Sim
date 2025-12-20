@@ -15,11 +15,12 @@ struct Program {
   std::vector<TokenSpan> tokens;
   
   struct Node {
-    enum Type { AND_, OR_, XOR_, NOT_, SR_, RS_, TON_, TOF_, BTN } type;
+    enum Type { AND_, OR_, XOR_, NOT_, SR_, RS_, TON_, TOF_, CTU_, BTN } type;
     std::string name;
     std::vector<int> inputs;
     std::vector<int> outputs;
     int sourceLine;
+    float hardcodedPresetTime = -1.0f;
   };
   std::vector<Node> nodes;
   std::vector<std::string> sourceLines;

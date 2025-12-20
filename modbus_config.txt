@@ -1,0 +1,5 @@
+ip=192.168.178.119
+port=502
+slave_id=1
+num_inputs=16
+num_outputs=16

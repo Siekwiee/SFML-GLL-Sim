@@ -1,4 +1,4 @@
 IN a
 OUT b
 
-TOF Step1(a) -> b
+TOF Step1("1000ms", a) -> b

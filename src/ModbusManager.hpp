@@ -31,6 +31,16 @@ public:
     // Reads outputs from Simulator and writes them to Modbus Coils
     void sync(Simulator& sim);
 
+    // Helpers 
+    void setNumInputs(int n);
+    void setNumOutputs(int n);
+    int getNumInputs() const { return numInputs_; }
+    int getNumOutputs() const { return numOutputs_; }
+
+    // Persistent settings management
+    void loadConfig();
+    void saveConfig();
+
 private:
     std::string ip_ = "127.0.0.1";
     int port_ = 502;
@@ -41,8 +51,10 @@ private:
     std::string lastError_;
     
     // Buffers for I/O
-    uint8_t inputBits_[16];       // Discrete Inputs (read-only)
-    uint8_t coilBits_[16];        // Coils (read-write)
+    int numInputs_ = 8;
+    int numOutputs_ = 8;
+    std::vector<uint8_t> inputBits_;
+    std::vector<uint8_t> coilBits_;
 };
 
 

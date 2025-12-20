@@ -45,7 +45,7 @@ private:
   std::unordered_map<int, bool> latch_, momentary_; // by node index
   std::unordered_map<int, bool> pendingLatch_, pendingMomentary_; // buffered inputs
   std::unordered_map<int, uint8_t> pendingSignals_; // buffered signal changes
-  std::unordered_map<std::string, uint8_t> presentTimeSeconds;
+  std::unordered_map<std::string, float> presentTimeSeconds;
   std::unordered_map<std::string, bool> nodeStatus;
   std::unordered_map<std::string, float> timerElapsedTime; // Elapsed time for each timer (in seconds)
 
@@ -53,6 +53,13 @@ private:
   void stepOneNode_();        // Step single node (for visualization)
   void finishStep_();         // Finish the current step cycle
   void commitPendingInputs_(); // Apply buffered inputs at start of cycle
+  bool castSignalToBool_(int sigIdx){
+    if (sigIdx < 0 || sigIdx >= static_cast<int>(next_.size())) {
+        return false;
+      } else {
+        return true;
+      }
+  };
   bool evaluateNode_(int nodeIdx);  // Evaluate a single node
   int findBtnIndex(const std::string& btnName) const;
 };
