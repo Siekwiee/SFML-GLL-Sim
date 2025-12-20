@@ -1,0 +1,52 @@
+IN INPUT_0(ArmFährtX), INPUT_1(ArmFährtZ), INPUT_2(ItemUnterArm), INPUT_3(DeckelSensor), INPUT_4(DeckelGeklemmt), INPUT_5(DeckelKlemmeUnten), INPUT_6(BasisSensor), INPUT_7(BasisGeklemmt), INPUT_8(BasisKlemmeUnten), INPUT_9(EndSensor), INPUT_10(Start), INPUT_11(Reset)
+OUT OUTPUT_0(ArmXfahrt), OUTPUT_1(ArmZfahrt), OUTPUT_2(ArmGreifen), OUTPUT_3(DeckelBand), OUTPUT_4(DeckelKlemmen), OUTPUT_5(DeckelKlemmeHeben), OUTPUT_6(BasisBand), OUTPUT_7(BasisKlemmen), OUTPUT_8(BasisKlemmeHeben)
+
+# made by @Alex
+
+OR BaseConv(S0B,S8) -> BasisBand
+OR LidConv(S0D) -> DeckelBand
+RS BaseClamp(S1B,S7) -> BasisKlemmen
+RS lidClamp(QT0D,S3) -> DeckelKlemmen
+#OR DeckelClamp(S1D,S2) -> DeckelKlemmen
+OR Zfahrt(S2,S3,S6) -> ArmZfahrt,z
+OR ArmGrab(S3,S4,S5,S6) -> ArmGreifen
+OR Xfahrt(S5,S6) -> ArmXfahrt
+OR BaseClampLift(S8) -> BasisKlemmeHeben
+
+
+OR betrieb(S0B,S0D,S1D,S1B,S2,S3,S4,S5,S6,S7,S8,S9) -> Qbetrieb
+OR loop1(Start, S9) -> Qloop1
+OR readyS0D(Qloop1, S4) -> QreadyS0D
+OR loop2(S0B, S0D) -> Qloop2
+RS deckelMerker(QT0D, S9) -> QdeckelMerker
+RS Schritt0Basis(Qloop1, S1B) -> S0B
+RS Schritt0Deckel(QreadyS0D, S1D) -> S0D
+AND DeckelDa(S0D, DeckelSensor) -> QDeckelDa
+AND BasisDa(S0B, BasisSensor) -> QBasisDa
+TON T0B("500ms",QDeckelDa) -> QT0D
+TON T0D("500ms",QBasisDa) -> QT0B
+RS Schritt1Basis(QT0B, S2) -> S1B
+RS Schritt1Deckel(QT0D, S2) -> S1D
+AND readyS2(QdeckelMerker,DeckelGeklemmt) -> QreadyS2
+OR temp1(S3,S6,S7) -> Qtemp1
+RS Schritt2(QreadyS2, Qtemp1) -> S2
+TON T3Ready("750ms",S2) -> QT3Ready
+AND readyS3(S2, ItemUnterArm, QT3Ready) -> QReadyS3
+RS Schritt3(QReadyS3, S4) -> S3
+TON T4Ready("750ms", S3) -> QT4Ready
+RS Schritt4(QT4Ready, S5) -> S4
+TON delayS5("300ms", S4) -> QdelayS5
+AND readyS5(S4,QdelayS5, NOT(ArmFährtZ)) -> QreadyS5
+RS Schritt5(QreadyS5, S6) -> S5
+TON delayS6("300ms", S5) -> QdelayS6
+AND readyS6(NOT(ArmFährtX), S5,QdelayS6, BasisGeklemmt) -> QreadyS6
+RS Schritt6(QreadyS6,S7) -> S6
+TON delayS7("300ms", S6) -> QdelayS7
+AND readyS7(NOT(ArmFährtX), NOT(ArmFährtZ), S6, QdelayS7) -> QreadyS7
+RS Schritt7(QreadyS7, S8) -> S7
+TON delayS8("500ms", S7) -> QdelayS8
+AND readyS8(NOT(ArmFährtX), NOT(ArmFährtZ), S7, QdelayS8) -> QreadyS8
+RS Schritt8(QreadyS8, S9) -> S8
+TON delayS9("800ms", S8) -> QdelayS9
+AND readyS9(S8, QdelayS9) -> QreadyS9
+RS Schritt9(QreadyS9, Qloop2) -> S9

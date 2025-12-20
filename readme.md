@@ -2,7 +2,7 @@
 
 A visual logic gate simulator. Write circuits in a simple text format, watch signals propagate get evaluated in real-time.
 
-[Video demo](https://youtu.be/dmqBSP6_abg)
+[Video demo](https://youtu.be/DbEJXLR-70E)
 
 ## Language
 

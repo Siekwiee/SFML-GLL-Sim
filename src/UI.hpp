@@ -58,6 +58,7 @@ private:
   
   float textStartX_ = 20.0f;
   float textStartY_ = 20.0f;
+  float scrollOffset_ = 0.0f;
   
   // Button positions (in left sidebar, vertical layout)
   sf::FloatRect playPauseBtn_;

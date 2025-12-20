@@ -9,6 +9,7 @@
 - Uniformised time parsing in UI and Gll
 - Added millisecond support
 - CTU work in progress
+- Added Scrolling behavior to the code part
 
 ## 0.0.3 - 2025-12-20
 

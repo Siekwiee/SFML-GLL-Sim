@@ -99,7 +99,7 @@ void UI::updateLayout(const sf::Vector2u& windowSize) {
   speedSlider_ = sf::FloatRect({sidebarPadding_, currentY}, {buttonWidth, sliderHeight});
   
   // Update text start position
-  textStartX_ = contentAreaX_ + 20.0f;
+  textStartX_ = 20.0f;
   textStartY_ = 20.0f;
   
   // Update BTN widgets
@@ -410,6 +410,19 @@ void UI::handleEvent(sf::RenderWindow& win, const sf::Event& ev) {
       }
     }
   }
+
+  if (auto* scroll = ev.getIf<sf::Event::MouseWheelScrolled>()) {
+    if (scroll->wheel == sf::Mouse::Wheel::Vertical) {
+      if (scroll->position.x > static_cast<int>(sidebarWidth_)) {
+        scrollOffset_ -= scroll->delta * 40.0f; // Scroll speed
+        
+        // Clamp scrollOffset_
+        float maxScroll = std::max(0.0f, static_cast<float>(prog_.sourceLines.size()) * Theme::LineHeight + 40.0f - (windowSize_.y));
+        if (scrollOffset_ < 0.0f) scrollOffset_ = 0.0f;
+        if (scrollOffset_ > maxScroll) scrollOffset_ = maxScroll;
+      }
+    }
+  }
 }
 
 void UI::update(float dt) {
@@ -431,9 +444,27 @@ void UI::draw(sf::RenderWindow& win) {
   drawControls(win);
   drawBTNWidgets(win);
   drawTimerWidgets(win);
+  
+  // Create a view for the content area to handle clipping and scrolling
+  sf::View oldView = win.getView();
+  
+  sf::View contentView;
+  float contentXNorm = static_cast<float>(sidebarWidth_) / currentSize.x;
+  float contentWNorm = static_cast<float>(contentAreaWidth_) / currentSize.x;
+  
+  contentView.setViewport(sf::FloatRect({contentXNorm, 0.0f}, {contentWNorm, 1.0f}));
+  contentView.setSize({static_cast<float>(contentAreaWidth_), static_cast<float>(currentSize.y)});
+  // The center is at half size, but moved down by scrollOffset_
+  contentView.setCenter({contentAreaWidth_ / 2.0f, currentSize.y / 2.0f + scrollOffset_});
+  
+  win.setView(contentView);
+  
   drawLineHighlight(win);
   drawText(win);
   drawTokenHighlights(win);
+  
+  win.setView(oldView);
+  
   drawSettingsPopup(win);
 }
 
