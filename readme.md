@@ -26,6 +26,8 @@ All IN signals get toggle widgets. BTN nodes are for momentary/latch behavior(WI
 
 ## Build
 
+Releases are currently Windows only for other Operating systems please build yourself.
+
 Requires SFML 3.x and CMake. Either use one of the provided build scripts, or build manually. If you do not want to build GLL from source, visit our [releases](https://github.com/siekwiee/SFML-GLL-Sim/releases) page.
 
 ```bash
