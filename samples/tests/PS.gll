@@ -1,0 +1,8 @@
+IN a, b
+OUT output, combined
+
+# Standalone PS - rising edge detector
+PS myPS(a) -> output
+
+# Inline PS usage - combined only triggers on rising edge of both a AND b being true
+AND gate1(PS(a), b) -> combined

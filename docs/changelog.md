@@ -4,7 +4,9 @@
 
 ## 0.0.5 - 2025-12-x
 
-- add support for not full values delared with . to time nodes
+- add support for not full number time values to be delared with .5s, .25s, etc
+- Implemented PS (Positive Signal/Rising Edge) node for detecting rising edges
+- Added inline PS() syntax support (similar to NOT()) for use in gate arguments
 
 ## 0.0.4 - 2025-12-20
 

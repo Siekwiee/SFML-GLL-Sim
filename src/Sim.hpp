@@ -59,6 +59,7 @@ private:
   std::unordered_map<std::string, int> presetCounterValue;
   std::unordered_map<std::string, int> currentCounterValue;
   std::unordered_map<std::string, bool> counterPrevInput;
+  std::unordered_map<std::string, bool> psPrevInput; // Previous input state for PS (rising edge) nodes
 
   void stepOnce_();           // Full step (all nodes at once)
   void stepOneNode_();        // Step single node (for visualization)

@@ -4,18 +4,35 @@
 #include <unordered_map>
 #include <filesystem>
 
-struct Program {
+struct Program
+{
   std::vector<std::string> inputNames, outputNames;
   std::unordered_map<std::string, int> symbolToSignal;
-  
-  struct TokenSpan { 
-    int line, col0, col1; 
-    std::string symbol; 
+
+  struct TokenSpan
+  {
+    int line, col0, col1;
+    std::string symbol;
   };
   std::vector<TokenSpan> tokens;
-  
-  struct Node {
-    enum Type { AND_, OR_, XOR_, NOT_, SR_, RS_, TON_, TOF_, CTU_, CTD_, BTN } type;
+
+  struct Node
+  {
+    enum Type
+    {
+      AND_,
+      OR_,
+      XOR_,
+      NOT_,
+      PS_,
+      SR_,
+      RS_,
+      TON_,
+      TOF_,
+      CTU_,
+      CTD_,
+      BTN
+    } type;
     std::string name;
     std::vector<int> inputs;
     std::vector<int> outputs;
@@ -27,4 +44,3 @@ struct Program {
   std::vector<std::string> sourceLines;
   std::filesystem::file_time_type lastModifiedAt;
 };
-

@@ -214,6 +214,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::XOR_;
     } else if (gateType == "NOT") {
       type = Program::Node::NOT_;
+    } else if (gateType == "PS") {
+      type = Program::Node::PS_;
     } else if (gateType == "SR") {
       type = Program::Node::SR_;
     } else if (gateType == "RS") {
@@ -290,6 +292,52 @@ ParseResult parseFile(const std::string& path, Program& out) {
         processed.replace(notPos, notEnd - notPos + 1, notOutputName);
         notPos = processed.find("NOT(");
       }
+
+      // Handle PS(...) in arguments - Positive Signal (Rising Edge) inline
+      size_t psPos = processed.find("PS(");
+      while (psPos != std::string::npos) {
+        // Find the matching closing paren by counting depth
+        int depth = 1;
+        size_t psEnd = psPos + 3; // Start after "PS("
+        while (psEnd < processed.size() && depth > 0) {
+          if (processed[psEnd] == '(') depth++;
+          else if (processed[psEnd] == ')') depth--;
+          if (depth > 0) psEnd++;
+        }
+        
+        if (depth != 0) {
+          return {false, "Line " + std::to_string(lineNum + 1) + ": Unmatched PS("};
+        }
+        
+        std::string psArg = processed.substr(psPos + 3, psEnd - psPos - 3);
+        trim(psArg);
+        
+        // Add token span for the argument inside PS() - find it in original line
+        size_t psInOriginal = argsStr.find("PS(");
+        if (psInOriginal != std::string::npos) {
+          size_t argInOriginal = argsStr.find(psArg, psInOriginal + 3);
+          if (argInOriginal != std::string::npos) {
+            int col0 = static_cast<int>(argsStartInLine + argInOriginal);
+            addTokenSpan(out, lineNum, col0, col0 + static_cast<int>(psArg.length()), psArg);
+          }
+        }
+        
+        // Create a PS node for this (rising edge detector)
+        Program::Node psNode;
+        psNode.type = Program::Node::PS_;
+        psNode.name = "_ps_" + std::to_string(out.nodes.size());
+        int psInputSig = getOrCreateSignal(out, psArg);
+        psNode.inputs.push_back(psInputSig);
+        std::string psOutputName = "_ps_" + std::to_string(out.nodes.size()) + "_out";
+        int psOutputSig = getOrCreateSignal(out, psOutputName);
+        psNode.outputs.push_back(psOutputSig);
+        psNode.sourceLine = lineNum;
+        out.nodes.push_back(psNode);
+        
+        // Replace PS(...) with the output signal name in processed string
+        processed.replace(psPos, psEnd - psPos + 1, psOutputName);
+        psPos = processed.find("PS(");
+      }
       
       // Now split by comma and add non-internal signals
       auto argList = split(processed, ',');
@@ -331,8 +379,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
         int sigId = getOrCreateSignal(out, arg);
         inputs.push_back(sigId);
         
-        // Only add token span for non-internal signals (not _not_X_out)
-        if (arg.find("_not_") != 0) {
+        // Only add token span for non-internal signals (not _not_X_out or _ps_X_out)
+        if (arg.find("_not_") != 0 && arg.find("_ps_") != 0) {
           // Find this exact token in original argsStr using word boundaries
           size_t pos = 0;
           while (pos < argsStr.size()) {

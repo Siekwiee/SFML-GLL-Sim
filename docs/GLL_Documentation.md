@@ -96,6 +96,37 @@ This makes the circuit "code" more dense and easier/natural to read.
 | 0 | 1 |
 | 1 | 0 |
 
+#### `PS`
+
+The `PS` (Positive Signal) gate is a **rising edge detector**. It outputs `true` only when its input transitions from `false` to `true`. If the input stays `true`, the output is `false` on subsequent evaluations. This is commonly used in PLC programming to detect button presses or trigger one-shot events.
+
+Like `NOT`, a `PS` gate can be used inline:
+
+```
+AND gate4(PS(a), b) -> c
+```
+
+Or as a standalone node:
+
+```
+PS myEdge(input_signal) -> edge_detected
+```
+
+**Behavior**:
+
+- Input goes from LOW to HIGH -> Output is HIGH (for one scan cycle)
+- Input stays HIGH -> Output is LOW
+- Input goes from HIGH to LOW -> Output is LOW
+- Input stays LOW -> Output is LOW
+
+**Truth table** (with previous state):
+| Previous | Current | Output |
+| --- | --- | --- |
+| 0 | 0 | 0 |
+| 0 | 1 | 1 |
+| 1 | 0 | 0 |
+| 1 | 1 | 0 |
+
 #### `SR`
 
 The `SR` gate is used to compute a `set/reset` position of its inputs. The reset priority in the `SR` variant in `GLL` differs from most known Norms, where for what ever reason the reset priority is contridictant to the naming, in `GLL` that is not the case. The input on `S` overrides the reset on `R`. Meaning if both inputs are `true`, the output is `true`.
