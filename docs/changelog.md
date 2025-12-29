@@ -2,7 +2,7 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
-## 0.0.5 - 2025-12-x
+## 0.0.5 - 2025-12-29
 
 - add support for not full number time values to be delared with .5s, .25s, etc
 - Implemented PS (Positive Signal/Rising Edge) node for detecting rising edges
