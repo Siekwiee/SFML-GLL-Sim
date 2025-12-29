@@ -447,6 +447,24 @@ bool Simulator::evaluateNode_(int nodeIdx)
     }
     break;
   }
+  case Program::Node::NS_:
+  {
+    // Negative Signal (Falling Edge) detector
+    // Outputs TRUE only when input transitions from TRUE to FALSE
+    out = false;
+    if (!n.inputs.empty())
+    {
+      bool currentInput = castSignalToBool_(n.inputs[0]);
+      bool prevInput = nsPrevInput[n.name]; // defaults to false if not found
+      
+      // Falling edge: was TRUE, now FALSE
+      out = !currentInput && prevInput;
+      
+      // Update previous state for next evaluation cycle
+      nsPrevInput[n.name] = currentInput;
+    }
+    break;
+  }
   // Set dominant
   case Program::Node::SR_:
   {
@@ -610,6 +628,13 @@ bool Simulator::evaluateNode_(int nodeIdx)
     setCurrentCounterValue(n.name, cv);
     counterPrevInput[n.name] = cu;
     out = (cv >= pv);
+    
+    // If CV output signal is defined, write the counter value to it
+    if (n.cvOutputSignal >= 0 && n.cvOutputSignal < static_cast<int>(next_.size()))
+    {
+      // Clamp to uint8_t range for signal storage (0-255)
+      next_[n.cvOutputSignal] = static_cast<uint8_t>(std::min(cv, 255));
+    }
     break;
   }
   case Program::Node::CTD_:
@@ -643,6 +668,61 @@ bool Simulator::evaluateNode_(int nodeIdx)
     setCurrentCounterValue(n.name, cv);
     counterPrevInput[n.name] = cd;
     out = (cv <= 0);
+    
+    // If CV output signal is defined, write the counter value to it
+    if (n.cvOutputSignal >= 0 && n.cvOutputSignal < static_cast<int>(next_.size()))
+    {
+      // Clamp to uint8_t range for signal storage (0-255)
+      next_[n.cvOutputSignal] = static_cast<uint8_t>(std::min(cv, 255));
+    }
+    break;
+  }
+  case Program::Node::LT_:
+  {
+    // Less Than comparator: compares two integer values (from CV signals)
+    // LT(a, b) -> result: true if a < b
+    if (n.inputs.size() >= 2)
+    {
+      int aVal = static_cast<int>(next_[n.inputs[0]]);
+      int bVal = static_cast<int>(next_[n.inputs[1]]);
+      out = (aVal < bVal);
+    }
+    else
+    {
+      out = false;
+    }
+    break;
+  }
+  case Program::Node::GT_:
+  {
+    // Greater Than comparator: compares two integer values (from CV signals)
+    // GT(a, b) -> result: true if a > b
+    if (n.inputs.size() >= 2)
+    {
+      int aVal = static_cast<int>(next_[n.inputs[0]]);
+      int bVal = static_cast<int>(next_[n.inputs[1]]);
+      out = (aVal > bVal);
+    }
+    else
+    {
+      out = false;
+    }
+    break;
+  }
+  case Program::Node::EQ_:
+  {
+    // Equal comparator: compares two integer values (from CV signals)
+    // EQ(a, b) -> result: true if a == b
+    if (n.inputs.size() >= 2)
+    {
+      int aVal = static_cast<int>(next_[n.inputs[0]]);
+      int bVal = static_cast<int>(next_[n.inputs[1]]);
+      out = (aVal == bVal);
+    }
+    else
+    {
+      out = false;
+    }
     break;
   }
   case Program::Node::BTN:
@@ -677,9 +757,9 @@ bool Simulator::evaluateNode_(int nodeIdx)
     curNodeIdx_ = nodeIdx;
 
     // Set line highlight BEFORE evaluating - this ensures it shows immediately
-    // Only show line highlight for "real" nodes, not internal _not_ or _ps_ nodes
-    // Internal nodes are auto-generated for inline NOT() and PS() and clutter the visualization
-    if (n.name.find("_not_") != 0 && n.name.find("_ps_") != 0)
+    // Only show line highlight for "real" nodes, not internal _not_, _ps_, or _ns_ nodes
+    // Internal nodes are auto-generated for inline NOT(), PS(), and NS() and clutter the visualization
+    if (n.name.find("_not_") != 0 && n.name.find("_ps_") != 0 && n.name.find("_ns_") != 0)
     {
       curLine_ = n.sourceLine;
       lastVisibleLine_ = n.sourceLine;
@@ -728,7 +808,7 @@ bool Simulator::evaluateNode_(int nodeIdx)
     {
       curNodeIdx_ = nodeIdx;
       const auto &node = prog_.nodes[nodeIdx];
-      if (node.name.find("_not_") != 0 && node.name.find("_ps_") != 0)
+      if (node.name.find("_not_") != 0 && node.name.find("_ps_") != 0 && node.name.find("_ns_") != 0)
       {
         curLine_ = node.sourceLine;
         lastVisibleLine_ = node.sourceLine;

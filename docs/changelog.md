@@ -7,6 +7,11 @@
 - add support for not full number time values to be delared with .5s, .25s, etc
 - Implemented PS (Positive Signal/Rising Edge) node for detecting rising edges
 - Added inline PS() syntax support (similar to NOT()) for use in gate arguments
+- Implemented NS (Negative Signal/Falling Edge) node for detecting falling edges
+- Added inline NS() syntax support (similar to NOT() and PS()) for use in gate arguments
+- Added CV (Counter Value) output extraction for CTU/CTD counters via second output variable
+- Implemented LT (Less Than), GT (Greater Than), and EQ (Equal) comparator gates
+- Comparators work with CV outputs to compare counter values
 
 ## 0.0.4 - 2025-12-20
 

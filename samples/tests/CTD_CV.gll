@@ -1,0 +1,10 @@
+# CTD with CV (Counter Value) output extraction test
+# The second output after -> extracts the actual counter value
+
+IN input, reset
+OUT done
+
+# Counter with CV output: done goes HIGH when CV <= 0
+# counterValue receives the actual counter value (0-255)
+CTD myCounter("10", input, reset) -> done, counterValue
+

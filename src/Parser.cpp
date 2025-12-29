@@ -216,6 +216,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::NOT_;
     } else if (gateType == "PS") {
       type = Program::Node::PS_;
+    } else if (gateType == "NS") {
+      type = Program::Node::NS_;
     } else if (gateType == "SR") {
       type = Program::Node::SR_;
     } else if (gateType == "RS") {
@@ -228,6 +230,12 @@ ParseResult parseFile(const std::string& path, Program& out) {
       type = Program::Node::CTU_;
     } else if (gateType == "CTD") {
       type = Program::Node::CTD_;
+    } else if (gateType == "LT") {
+      type = Program::Node::LT_;
+    } else if (gateType == "GT") {
+      type = Program::Node::GT_;
+    } else if (gateType == "EQ") {
+      type = Program::Node::EQ_;
     } else if (gateType == "BTN") {
       type = Program::Node::BTN;
     } else {
@@ -338,6 +346,52 @@ ParseResult parseFile(const std::string& path, Program& out) {
         processed.replace(psPos, psEnd - psPos + 1, psOutputName);
         psPos = processed.find("PS(");
       }
+
+      // Handle NS(...) in arguments - Negative Signal (Falling Edge) inline
+      size_t nsPos = processed.find("NS(");
+      while (nsPos != std::string::npos) {
+        // Find the matching closing paren by counting depth
+        int depth = 1;
+        size_t nsEnd = nsPos + 3; // Start after "NS("
+        while (nsEnd < processed.size() && depth > 0) {
+          if (processed[nsEnd] == '(') depth++;
+          else if (processed[nsEnd] == ')') depth--;
+          if (depth > 0) nsEnd++;
+        }
+        
+        if (depth != 0) {
+          return {false, "Line " + std::to_string(lineNum + 1) + ": Unmatched NS("};
+        }
+        
+        std::string nsArg = processed.substr(nsPos + 3, nsEnd - nsPos - 3);
+        trim(nsArg);
+        
+        // Add token span for the argument inside NS() - find it in original line
+        size_t nsInOriginal = argsStr.find("NS(");
+        if (nsInOriginal != std::string::npos) {
+          size_t argInOriginal = argsStr.find(nsArg, nsInOriginal + 3);
+          if (argInOriginal != std::string::npos) {
+            int col0 = static_cast<int>(argsStartInLine + argInOriginal);
+            addTokenSpan(out, lineNum, col0, col0 + static_cast<int>(nsArg.length()), nsArg);
+          }
+        }
+        
+        // Create a NS node for this (falling edge detector)
+        Program::Node nsNode;
+        nsNode.type = Program::Node::NS_;
+        nsNode.name = "_ns_" + std::to_string(out.nodes.size());
+        int nsInputSig = getOrCreateSignal(out, nsArg);
+        nsNode.inputs.push_back(nsInputSig);
+        std::string nsOutputName = "_ns_" + std::to_string(out.nodes.size()) + "_out";
+        int nsOutputSig = getOrCreateSignal(out, nsOutputName);
+        nsNode.outputs.push_back(nsOutputSig);
+        nsNode.sourceLine = lineNum;
+        out.nodes.push_back(nsNode);
+        
+        // Replace NS(...) with the output signal name in processed string
+        processed.replace(nsPos, nsEnd - nsPos + 1, nsOutputName);
+        nsPos = processed.find("NS(");
+      }
       
       // Now split by comma and add non-internal signals
       auto argList = split(processed, ',');
@@ -379,8 +433,8 @@ ParseResult parseFile(const std::string& path, Program& out) {
         int sigId = getOrCreateSignal(out, arg);
         inputs.push_back(sigId);
         
-        // Only add token span for non-internal signals (not _not_X_out or _ps_X_out)
-        if (arg.find("_not_") != 0 && arg.find("_ps_") != 0) {
+        // Only add token span for non-internal signals (not _not_X_out, _ps_X_out, or _ns_X_out)
+        if (arg.find("_not_") != 0 && arg.find("_ps_") != 0 && arg.find("_ns_") != 0) {
           // Find this exact token in original argsStr using word boundaries
           size_t pos = 0;
           while (pos < argsStr.size()) {
@@ -407,9 +461,17 @@ ParseResult parseFile(const std::string& path, Program& out) {
     std::vector<int> outputSigs;
     auto outputNames = split(afterArrow, ',');
     size_t searchStart = arrowPos + 2; // Start after "->"
+    int outputIdx = 0;
     for (const auto& outputName : outputNames) {
       int outputSig = getOrCreateSignal(out, outputName);
-      outputSigs.push_back(outputSig);
+      
+      // For CTU/CTD: second output is CV (counter value) output
+      if ((type == Program::Node::CTU_ || type == Program::Node::CTD_) && outputIdx == 1) {
+        node.cvOutputSignal = outputSig;
+      } else {
+        outputSigs.push_back(outputSig);
+      }
+      
       // Find this output name in the original line
       size_t outPos = line.find(outputName, searchStart);
       if (outPos != std::string::npos) {
@@ -417,6 +479,7 @@ ParseResult parseFile(const std::string& path, Program& out) {
                      static_cast<int>(outPos + outputName.length()), outputName);
         searchStart = outPos + outputName.length();
       }
+      outputIdx++;
     }
 
     // Create node

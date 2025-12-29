@@ -1,0 +1,12 @@
+# NS (Negative Signal) - Falling Edge Detector Test
+# NS outputs TRUE only when input transitions from TRUE to FALSE
+
+IN a, b
+OUT output, combined
+
+# Standalone NS - falling edge detector
+NS myNS(a) -> output
+
+# Inline NS usage - combined only triggers on falling edge of a when b is true
+AND gate1(NS(a), b) -> combined
+

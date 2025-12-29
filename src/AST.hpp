@@ -25,12 +25,16 @@ struct Program
       XOR_,
       NOT_,
       PS_,
+      NS_,
       SR_,
       RS_,
       TON_,
       TOF_,
       CTU_,
       CTD_,
+      LT_,
+      GT_,
+      EQ_,
       BTN
     } type;
     std::string name;
@@ -39,6 +43,7 @@ struct Program
     int sourceLine;
     float hardcodedPresetTime = -1.0f;
     int hardcodedPresetValue = -1;
+    int cvOutputSignal = -1;  // For counters: optional second output to expose CV value
   };
   std::vector<Node> nodes;
   std::vector<std::string> sourceLines;

@@ -1,0 +1,9 @@
+# CTU with CV (Counter Value) output extraction test
+# The second output after -> extracts the actual counter value
+
+IN input, reset
+OUT done
+
+# Counter with CV output: done goes HIGH when CV >= PV (5)
+# counterValue receives the actual counter value (0-255)
+CTU myCounter("5", input, reset) -> done, counterValue

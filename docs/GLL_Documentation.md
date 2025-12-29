@@ -127,6 +127,37 @@ PS myEdge(input_signal) -> edge_detected
 | 1 | 0 | 0 |
 | 1 | 1 | 0 |
 
+#### `NS`
+
+The `NS` (Negative Signal) gate is a **falling edge detector**. It outputs `true` only when its input transitions from `true` to `false`. If the input stays `false`, the output is `false` on subsequent evaluations. This is the inverse of `PS` and is commonly used to detect release events or falling transitions.
+
+Like `NOT` and `PS`, a `NS` gate can be used inline:
+
+```
+AND gate5(NS(a), b) -> c
+```
+
+Or as a standalone node:
+
+```
+NS myFallingEdge(input_signal) -> edge_detected
+```
+
+**Behavior**:
+
+- Input goes from HIGH to LOW -> Output is HIGH (for one scan cycle)
+- Input stays LOW -> Output is LOW
+- Input goes from LOW to HIGH -> Output is LOW
+- Input stays HIGH -> Output is LOW
+
+**Truth table** (with previous state):
+| Previous | Current | Output |
+| --- | --- | --- |
+| 0 | 0 | 0 |
+| 0 | 1 | 0 |
+| 1 | 0 | 1 |
+| 1 | 1 | 0 |
+
 #### `SR`
 
 The `SR` gate is used to compute a `set/reset` position of its inputs. The reset priority in the `SR` variant in `GLL` differs from most known Norms, where for what ever reason the reset priority is contridictant to the naming, in `GLL` that is not the case. The input on `S` overrides the reset on `R`. Meaning if both inputs are `true`, the output is `true`.
@@ -240,7 +271,7 @@ TOF delay_off(stop) -> delayed_output
 The `CTU` gate is a count-up counter. It increases its current value (CV) on every positive edge of the count-up (CU) input signal. When CV is greater than or equal to the preset value (PV), the output (Q) goes HIGH.
 
 - Inputs: `CU` (count up), `R` (reset)
-- Outputs: `Q` (done)
+- Outputs: `Q` (done), optionally `CV` (counter value)
 - Configurable Variables: `PV` (Preset Value) which can be edited in the UI sidebar by clicking the counter widget, or **hardcoded** in the GLL file as the first argument. `CV` (Current Value) is internal and updated automatically.
 
 **Hardcoded Example**:
@@ -250,18 +281,31 @@ The `CTU` gate is a count-up counter. It increases its current value (CV) on eve
 CTU myCounter("10", input, reset) -> done
 ```
 
+**CV Output Example**:
+
+You can extract the counter value (CV) as a second output. This allows you to use the counter value with comparators (LT, GT, EQ) or pass it to other nodes.
+
+```
+# done goes HIGH when CV >= 10, counterValue holds the actual count (0-255)
+CTU myCounter("10", input, reset) -> done, counterValue
+
+# Compare counter value with another signal
+GT isAboveFive(counterValue, threshold) -> aboveThreshold
+```
+
 **Behavior**:
 
 - Positive edge on `CU` → `CV` increases by 1 (max 32767)
 - `R` is HIGH → `CV` resets to 0
 - `CV >= PV` → `Q` is HIGH, otherwise LOW
+- CV output is clamped to 0-255 for signal storage
 
 #### `CTD`
 
 The `CTD` gate is a count-down counter. It decreases its current value (CV) on every positive edge of the count-down (CD) input signal. When CV is less than or equal to 0, the output (Q) goes HIGH.
 
 - Inputs: `CD` (count down), `LD` (load)
-- Outputs: `Q` (done)
+- Outputs: `Q` (done), optionally `CV` (counter value)
 - Configurable Variables: `PV` (Preset Value) which can be edited in the UI sidebar by clicking the counter widget, or **hardcoded** in the GLL file as the first argument. `CV` (Current Value) is internal and updated automatically.
 
 **Hardcoded Example**:
@@ -271,11 +315,82 @@ The `CTD` gate is a count-down counter. It decreases its current value (CV) on e
 CTD myCounter("5", input, load) -> done
 ```
 
+**CV Output Example**:
+
+You can extract the counter value (CV) as a second output. This allows you to use the counter value with comparators (LT, GT, EQ) or pass it to other nodes.
+
+```
+# done goes HIGH when CV <= 0, counterValue holds the actual count (0-255)
+CTD myCounter("10", input, load) -> done, counterValue
+```
+
 **Behavior**:
 
 - Positive edge on `CD` → `CV` decreases by 1 (stops at 0)
 - `LD` is HIGH → `CV` is set to `PV`
 - `CV <= 0` → `Q` is HIGH, otherwise LOW
+- CV output is clamped to 0-255 for signal storage
+
+#### `LT`
+
+The `LT` (Less Than) gate is a **comparator**. It compares two integer values and outputs `true` if the first value is less than the second. This is primarily designed to work with CV (Counter Value) outputs from CTU/CTD counters.
+
+- Inputs: `A`, `B` (integer values, typically from CV outputs)
+- Outputs: `Q` (true if A < B)
+
+```
+LT compare(valueA, valueB) -> isLess
+```
+
+**Behavior**:
+
+- `A < B` → `Q` is HIGH
+- `A >= B` → `Q` is LOW
+
+#### `GT`
+
+The `GT` (Greater Than) gate is a **comparator**. It compares two integer values and outputs `true` if the first value is greater than the second.
+
+- Inputs: `A`, `B` (integer values, typically from CV outputs)
+- Outputs: `Q` (true if A > B)
+
+```
+GT compare(valueA, valueB) -> isGreater
+```
+
+**Behavior**:
+
+- `A > B` → `Q` is HIGH
+- `A <= B` → `Q` is LOW
+
+#### `EQ`
+
+The `EQ` (Equal) gate is a **comparator**. It compares two integer values and outputs `true` if they are equal.
+
+- Inputs: `A`, `B` (integer values, typically from CV outputs)
+- Outputs: `Q` (true if A == B)
+
+```
+EQ compare(valueA, valueB) -> isEqual
+```
+
+**Behavior**:
+
+- `A == B` → `Q` is HIGH
+- `A != B` → `Q` is LOW
+
+**Comparator Example with Counters**:
+
+```
+# Two counters with CV outputs
+CTU counterA("10", inputA, resetA) -> doneA, cvA
+CTU counterB("10", inputB, resetB) -> doneB, cvB
+
+# Compare the counter values
+LT aLessThanB(cvA, cvB) -> isLess
+GT aGreaterThanB(cvA, cvB) -> isGreater
+EQ aEqualsB(cvA, cvB) -> isEqual
+```
 
 #### `BTN` (Work In Progress)
 

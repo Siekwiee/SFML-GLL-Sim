@@ -1,0 +1,21 @@
+# Comparator Gates Test
+# LT (Less Than), GT (Greater Than), EQ (Equal)
+# These compare integer values from CV outputs of counters
+
+IN countUp, countDown, resetUp, loadDown
+OUT upDone, downDone, upIsLess, upIsGreater, upIsEqual
+
+# Two counters to compare
+CTU counterUp("10", countUp, resetUp) -> upDone, cvUp
+CTD counterDown("10", countDown, loadDown) -> downDone, cvDown
+
+# Compare the two counter values
+# upIsLess is HIGH when counterUp's CV < counterDown's CV
+LT lessThan(cvUp, cvDown) -> upIsLess
+
+# upIsGreater is HIGH when counterUp's CV > counterDown's CV
+GT greaterThan(cvUp, cvDown) -> upIsGreater
+
+# upIsEqual is HIGH when counterUp's CV == counterDown's CV
+EQ equalTo(cvUp, cvDown) -> upIsEqual
+
