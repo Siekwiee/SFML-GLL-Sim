@@ -86,6 +86,14 @@ private:
   bool isEditingCounter_ = false;
   // Input signal widgets (auto-generated for IN signals without explicit BTN)
   std::unordered_map<std::string, sf::FloatRect> inputWidgets_;
+  
+  // Analog input/output widget positions (for AIN/AOUT signals - hex values)
+  std::unordered_map<std::string, sf::FloatRect> analogInputWidgets_;
+  std::unordered_map<std::string, sf::FloatRect> analogOutputWidgets_;
+  std::unordered_map<std::string, std::string> analogInputTextInputs_;
+  std::unordered_map<std::string, bool> analogInputHexMode_;  // true = hex, false = decimal
+  std::string activeAnalogInputWidget_;
+  bool isEditingAnalogInput_ = false;
 
   void loadFont();
   void updateSimSpeed();
@@ -97,6 +105,7 @@ private:
   void drawBTNWidgets(sf::RenderWindow &win);
   void drawTimerWidgets(sf::RenderWindow &win);
   void drawCounterWidgets(sf::RenderWindow &win);
+  void drawAnalogWidgets(sf::RenderWindow &win);
   sf::Color getSignalColor(int signalId) const;
   void updateBTNWidgets();
   bool isPointInRect(const sf::Vector2f &point, const sf::FloatRect &rect) const;

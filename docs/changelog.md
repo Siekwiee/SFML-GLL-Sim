@@ -2,6 +2,19 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
+## 0.0.6 - 2026-01-06
+
+- Added AIN (Analog Input) and AOUT (Analog Output) signal declarations for 8-bit hex values (0x00-0xFF)
+- Added hex literal support in comparators ("0xFF", "0x80") and decimal literals ("128")
+- Counter CV outputs, analog signals, and literals are all compatible for comparisons
+- Added analog input widgets with editable values and HEX/DEC toggle switch
+- Added analog output widgets (read-only display)
+- Added Modbus TCP support for analog I/O (AINPUT_N/AOUTPUT_N mapped to registers)
+- Removed ESC key closing the application instead ESC jumps out of the current selected text input and reverts changes made.
+- Updated [GLL_Documentation.md](GLL_Documentation.md#Syntax) with AIN/AOUT syntax and added samples/tests/analog_comparators.gll
+
+
+
 ## 0.0.5 - 2025-12-29
 
 - add support for not full number time values to be delared with .5s, .25s, etc
@@ -35,10 +48,10 @@
 - Added support for higher frequencies (UNTESTED)
 - Added ModBus Client Support
 - Added FactoryIO A-To-B GLL example
-- Added alias support for inputs and outputs see [Aliasing](docs/GLL_Documentation.md#aliasing)
+- Added alias support for inputs and outputs see [Aliasing](GLL_Documentation.md#aliasing)
 - Hardened font loading and added fallback
 - Capped max sim speed at 2000 Hz for now
-- Added XOR gate support see [XOR-Gate](docs/GLL_Documentation.md#xor)
+- Added XOR gate support see [XOR-Gate](GLL_Documentation.md#xor)
 
 ## 0.0.2 - 2025-12-19
 

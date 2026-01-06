@@ -54,12 +54,6 @@ int main(int argc, char** argv) {
       if (event->is<sf::Event::Closed>()) {
         win.close();
       }
-      // Escape key to exit fullscreen
-      if (auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::Escape) {
-          win.close();
-        }
-      }
       ui->handleEvent(win, *event);
     }
 

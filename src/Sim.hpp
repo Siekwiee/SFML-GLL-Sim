@@ -30,6 +30,11 @@ struct Simulator {
   void toggleSignal(const std::string& signalName);
   void setSignal(const std::string& signalName, bool value);
   
+  // Analog signal control (for AIN/AOUT signals - 0x00-0xFF)
+  void setAnalogSignal(const std::string& signalName, uint8_t value);
+  uint8_t getAnalogSignalValue(const std::string& signalName) const;
+  bool isAnalogSignal(const std::string& signalName) const;
+  
   const std::vector<uint8_t>& signals() const { return cur_; }
   int currentEvaluatingLine() const { return curLine_; }
   int currentEvaluatingNode() const { return curNodeIdx_; }

@@ -46,6 +46,44 @@ static void addTokenSpan(Program& prog, int line, int col0, int col1, const std:
   span.symbol = symbol;
   prog.tokens.push_back(span);
 }
+
+// Parse hex value (e.g., "0xFF", "0x10", "255", "0") to integer
+// Returns -1 if not a valid number
+static int parseHexOrDecimal(const std::string& str) {
+  if (str.empty()) return -1;
+  
+  std::string s = str;
+  // Remove quotes if present
+  if (s.front() == '"' && s.back() == '"' && s.length() >= 2) {
+    s = s.substr(1, s.length() - 2);
+  }
+  
+  try {
+    if (s.length() > 2 && (s.substr(0, 2) == "0x" || s.substr(0, 2) == "0X")) {
+      // Hex format
+      return std::stoi(s.substr(2), nullptr, 16);
+    } else {
+      // Decimal format
+      return std::stoi(s);
+    }
+  } catch (...) {
+    return -1;
+  }
+}
+
+// Create a constant signal with a fixed value
+static int getOrCreateConstantSignal(Program& prog, int value) {
+  // Create a unique name for the constant
+  std::string constName = "_const_" + std::to_string(value);
+  auto it = prog.symbolToSignal.find(constName);
+  if (it != prog.symbolToSignal.end()) {
+    return it->second;
+  }
+  int id = static_cast<int>(prog.symbolToSignal.size());
+  prog.symbolToSignal[constName] = id;
+  prog.analogSignals.insert(id);  // Constants are analog signals
+  return id;
+}
 bool fileWatcher(const std::string& path, Program& out) {
   if (std::filesystem::last_write_time(path) != out.lastModifiedAt) {
     return true;
@@ -64,7 +102,11 @@ ParseResult parseFile(const std::string& path, Program& out) {
 
   out.inputNames.clear();
   out.outputNames.clear();
+  out.analogInputNames.clear();
+  out.analogOutputNames.clear();
   out.symbolToSignal.clear();
+  out.analogSignals.clear();
+  out.constantSignalValues.clear();
   out.nodes.clear();
   out.sourceLines.clear();
   out.tokens.clear();
@@ -148,6 +190,88 @@ ParseResult parseFile(const std::string& path, Program& out) {
           out.outputNames.push_back(alias);
         } else {
           out.outputNames.push_back(name);
+        }
+
+        // Find with word boundary check
+        size_t pos = line.find(item, searchStart);
+        if (pos != std::string::npos) {
+          addTokenSpan(out, lineNum, static_cast<int>(pos), 
+                       static_cast<int>(pos + item.length()), item);
+          searchStart = pos + item.length();
+        }
+      }
+      lineNum++;
+      continue;
+    }
+
+    // Parse AIN (Analog Input) declaration - values are 0x00-0xFF (0-255)
+    if (line.substr(0, 4) == "AIN ") {
+      std::string rest = line.substr(4);
+      auto items = split(rest, ',');
+      size_t searchStart = 4; // Start after "AIN "
+      for (const auto& item : items) {
+        // Check for alias: name(alias)
+        size_t parenOpen = item.find('(');
+        size_t parenClose = item.find(')');
+        
+        std::string name = item;
+        std::string alias = "";
+        
+        if (parenOpen != std::string::npos && parenClose != std::string::npos && parenClose > parenOpen) {
+          name = item.substr(0, parenOpen);
+          alias = item.substr(parenOpen + 1, parenClose - parenOpen - 1);
+          trim(name);
+          trim(alias);
+        }
+
+        int sigId = getOrCreateSignal(out, name);
+        out.analogSignals.insert(sigId);  // Mark as analog signal
+        if (!alias.empty()) {
+          out.symbolToSignal[alias] = sigId;
+          out.analogInputNames.push_back(alias);
+        } else {
+          out.analogInputNames.push_back(name);
+        }
+
+        // Find with word boundary check
+        size_t pos = line.find(item, searchStart);
+        if (pos != std::string::npos) {
+          addTokenSpan(out, lineNum, static_cast<int>(pos), 
+                       static_cast<int>(pos + item.length()), item);
+          searchStart = pos + item.length();
+        }
+      }
+      lineNum++;
+      continue;
+    }
+
+    // Parse AOUT (Analog Output) declaration - values are 0x00-0xFF (0-255)
+    if (line.substr(0, 5) == "AOUT ") {
+      std::string rest = line.substr(5);
+      auto items = split(rest, ',');
+      size_t searchStart = 5; // Start after "AOUT "
+      for (const auto& item : items) {
+        // Check for alias: name(alias)
+        size_t parenOpen = item.find('(');
+        size_t parenClose = item.find(')');
+        
+        std::string name = item;
+        std::string alias = "";
+        
+        if (parenOpen != std::string::npos && parenClose != std::string::npos && parenClose > parenOpen) {
+          name = item.substr(0, parenOpen);
+          alias = item.substr(parenOpen + 1, parenClose - parenOpen - 1);
+          trim(name);
+          trim(alias);
+        }
+
+        int sigId = getOrCreateSignal(out, name);
+        out.analogSignals.insert(sigId);  // Mark as analog signal
+        if (!alias.empty()) {
+          out.symbolToSignal[alias] = sigId;
+          out.analogOutputNames.push_back(alias);
+        } else {
+          out.analogOutputNames.push_back(name);
         }
 
         // Find with word boundary check
@@ -429,12 +553,28 @@ ParseResult parseFile(const std::string& path, Program& out) {
         }
 
         argIdx++;
-        inputSymbols.push_back(arg);
-        int sigId = getOrCreateSignal(out, arg);
-        inputs.push_back(sigId);
         
-        // Only add token span for non-internal signals (not _not_X_out, _ps_X_out, or _ns_X_out)
-        if (arg.find("_not_") != 0 && arg.find("_ps_") != 0 && arg.find("_ns_") != 0) {
+        // For comparators (LT, GT, EQ), check if this argument is a hex/decimal literal
+        bool isLiteral = false;
+        if (type == Program::Node::LT_ || type == Program::Node::GT_ || type == Program::Node::EQ_) {
+          int constVal = parseHexOrDecimal(arg);
+          if (constVal >= 0 && constVal <= 255) {
+            isLiteral = true;
+            int sigId = getOrCreateConstantSignal(out, constVal);
+            out.constantSignalValues[sigId] = constVal;
+            inputs.push_back(sigId);
+            // Don't add to inputSymbols for literals
+          }
+        }
+        
+        if (!isLiteral) {
+          inputSymbols.push_back(arg);
+          int sigId = getOrCreateSignal(out, arg);
+          inputs.push_back(sigId);
+        }
+        
+        // Only add token span for non-internal signals (not _not_X_out, _ps_X_out, _ns_X_out, or _const_X)
+        if (arg.find("_not_") != 0 && arg.find("_ps_") != 0 && arg.find("_ns_") != 0 && arg.find("_const_") != 0 && !isLiteral) {
           // Find this exact token in original argsStr using word boundaries
           size_t pos = 0;
           while (pos < argsStr.size()) {

@@ -1,0 +1,39 @@
+# Analog Comparators Test/Example
+# Testing AIN (analog inputs) with LT, GT, EQ comparators
+# 
+# All integer values are compatible:
+# - Counter CV outputs (0-255)
+# - Analog signals AIN/AOUT (0x00-0xFF)
+# - Hex/decimal literals ("0x80", "128")
+# They can all be compared against each other!
+
+# Analog inputs - can be set via UI or Modbus
+AIN sensorA, sensorB, threshold
+
+# Digital inputs for counter
+IN countUp, resetCounter
+
+# Digital outputs for comparator results
+OUT aLessThanB, aGreaterThanB, aEqualsB
+OUT aAboveThreshold, aBelowHalf, aExactlyFF
+OUT sensorAboveCount, sensorEqualsCount
+
+# Counter with CV output (0-255 integer value)
+CTU myCounter("50", countUp, resetCounter) -> counterDone, counterCV
+
+# Compare two analog inputs against each other
+LT compareAB_lt(sensorA, sensorB) -> aLessThanB
+GT compareAB_gt(sensorA, sensorB) -> aGreaterThanB
+EQ compareAB_eq(sensorA, sensorB) -> aEqualsB
+
+# Compare analog input against another analog input (threshold)
+GT aboveThreshold(sensorA, threshold) -> aAboveThreshold
+
+# Compare analog input against hex literal
+LT belowHalf(sensorA, "0x80") -> aBelowHalf
+EQ exactlyFF(sensorA, "0xFF") -> aExactlyFF
+
+# Compare analog input against counter CV value
+# This works because they're all integers under the hood!
+GT sensorVsCounter(sensorA, counterCV) -> sensorAboveCount
+EQ sensorMatchCounter(sensorA, counterCV) -> sensorEqualsCount

@@ -31,11 +31,17 @@ public:
     // Reads outputs from Simulator and writes them to Modbus Coils
     void sync(Simulator& sim);
 
-    // Helpers 
+    // Helpers for digital I/O
     void setNumInputs(int n);
     void setNumOutputs(int n);
     int getNumInputs() const { return numInputs_; }
     int getNumOutputs() const { return numOutputs_; }
+    
+    // Helpers for analog I/O (registers)
+    void setNumAnalogInputs(int n);
+    void setNumAnalogOutputs(int n);
+    int getNumAnalogInputs() const { return numAnalogInputs_; }
+    int getNumAnalogOutputs() const { return numAnalogOutputs_; }
 
     // Persistent settings management
     void loadConfig();
@@ -50,11 +56,17 @@ private:
     std::atomic<bool> connected_{false};
     std::string lastError_;
     
-    // Buffers for I/O
+    // Buffers for digital I/O (bits)
     int numInputs_ = 8;
     int numOutputs_ = 8;
     std::vector<uint8_t> inputBits_;
     std::vector<uint8_t> coilBits_;
+    
+    // Buffers for analog I/O (16-bit registers, we use lower 8 bits)
+    int numAnalogInputs_ = 0;
+    int numAnalogOutputs_ = 0;
+    std::vector<uint16_t> inputRegisters_;
+    std::vector<uint16_t> holdingRegisters_;
 };
 
 

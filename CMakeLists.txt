@@ -1,4 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
+
+# Set compiler based on platform before project declaration
+if(WIN32)
+    # Windows: Use clang++12
+    set(CMAKE_CXX_COMPILER "clang++")
+    set(CMAKE_C_COMPILER "clang")
+elseif(UNIX AND NOT APPLE)
+    # Linux: Use g++
+    set(CMAKE_CXX_COMPILER "g++")
+    set(CMAKE_C_COMPILER "gcc")
+endif()
+
 project(Gates LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -15,7 +27,7 @@ if(WIN32)
     set(SFML_DIR "${SFML_ROOT}/lib/cmake/SFML")
     message(STATUS "Using SFML from Windows MSVC build: ${SFML_ROOT}")
 elseif(UNIX AND NOT APPLE)
-    # Linux: Use system-installed SFML (common approach for Linux development)
+    # Linux: Use system-installed SFML 3 (installed via 'sudo make install' after building from source)
     message(STATUS "Using system-installed SFML on Linux")
 else()
     message(FATAL_ERROR "Unsupported platform. This project supports Windows and Linux only.")
@@ -23,8 +35,17 @@ endif()
 
 find_package(SFML 3 REQUIRED COMPONENTS Graphics Window System)
 
-# Add libmodbus
-add_subdirectory(vendored/libmodbus)
+# Handle libmodbus differently per platform
+if(WIN32)
+    # Windows: Build from vendored source
+    add_subdirectory(vendored/libmodbus)
+    set(MODBUS_LIBRARIES modbus)
+elseif(UNIX AND NOT APPLE)
+    # Linux: Use system-installed libmodbus
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(MODBUS REQUIRED libmodbus)
+    message(STATUS "Found system libmodbus: ${MODBUS_VERSION}")
+endif()
 
 add_executable(GLLSimulator 
   src/main.cpp
@@ -34,7 +55,14 @@ add_executable(GLLSimulator
   src/UI.cpp
   src/ModbusManager.cpp
 )
-target_link_libraries(GLLSimulator PRIVATE SFML::Graphics SFML::Window SFML::System modbus)
+
+if(WIN32)
+    target_link_libraries(GLLSimulator PRIVATE SFML::Graphics SFML::Window SFML::System ${MODBUS_LIBRARIES})
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(GLLSimulator PRIVATE SFML::Graphics SFML::Window SFML::System ${MODBUS_LIBRARIES})
+    target_include_directories(GLLSimulator PRIVATE ${MODBUS_INCLUDE_DIRS})
+    target_compile_options(GLLSimulator PRIVATE ${MODBUS_CFLAGS_OTHER})
+endif()
 
 # Platform-specific post-build steps
 if(WIN32)

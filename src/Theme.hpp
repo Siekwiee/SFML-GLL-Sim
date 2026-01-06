@@ -11,6 +11,7 @@ namespace Theme {
   inline const sf::Color TextRed(200, 100, 100);
   inline const sf::Color TextYellow(220, 180, 80);
   inline const sf::Color TextOrange(230, 140, 80);
+  inline const sf::Color TextCyan(100, 200, 220);  // For analog signals
   
   // Highlight colors
   inline const sf::Color LineHighlight(60, 60, 70, 150);

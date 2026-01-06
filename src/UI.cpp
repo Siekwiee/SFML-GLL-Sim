@@ -31,9 +31,9 @@ void UI::loadFont()
   // Potential font paths in order of preference
   std::vector<std::string> fontPaths = {
       // 1. Vendored Geist (relative to executable)
-      "../vendored/Geist/static/Geist-Regular.ttf",
       "vendored/Geist/static/Geist-Regular.ttf",
-      "../../vendored/Geist/static/Geist-Regular.ttf",
+
+      // Fallbacks
 
       // 2. System-installed Geist (Windows)
       "C:/Windows/Fonts/Geist-Regular.ttf",
@@ -116,6 +116,8 @@ void UI::updateBTNWidgets()
   tNodeWidgets_.clear();
   counterWidgets_.clear();
   inputWidgets_.clear();
+  analogInputWidgets_.clear();
+  analogOutputWidgets_.clear();
 
   if (!fontLoaded_)
     return;
@@ -196,6 +198,40 @@ void UI::updateBTNWidgets()
       }
       widgetY += widgetHeight * 2 + 5.0f;
     }
+  }
+
+  // Create widgets for analog inputs (AIN signals - editable hex/dec values)
+  for (const auto &inputName : prog_.analogInputNames)
+  {
+    analogInputWidgets_[inputName] = sf::FloatRect({sidebarPadding_, widgetY}, {widgetWidth, widgetHeight});
+    // Initialize hex mode (default to hex)
+    if (analogInputHexMode_.count(inputName) == 0)
+    {
+      analogInputHexMode_[inputName] = true;  // Default to hex mode
+    }
+    // Initialize text input with current value
+    if (analogInputTextInputs_.count(inputName) == 0)
+    {
+      uint8_t val = sim_.getAnalogSignalValue(inputName);
+      if (analogInputHexMode_[inputName])
+      {
+        char hexBuf[8];
+        snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+        analogInputTextInputs_[inputName] = hexBuf;
+      }
+      else
+      {
+        analogInputTextInputs_[inputName] = std::to_string(val);
+      }
+    }
+    widgetY += widgetHeight + 5.0f;
+  }
+
+  // Create widgets for analog outputs (AOUT signals - read-only hex values)
+  for (const auto &outputName : prog_.analogOutputNames)
+  {
+    analogOutputWidgets_[outputName] = sf::FloatRect({sidebarPadding_, widgetY}, {widgetWidth, widgetHeight});
+    widgetY += widgetHeight + 5.0f;
   }
 
   // Create widgets for explicit BTN nodes
@@ -367,6 +403,96 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
     return;
   }
 
+  // Handle text input for analog input widgets (hex or decimal based on mode)
+  if (isEditingAnalogInput_ && !activeAnalogInputWidget_.empty())
+  {
+    bool isHexMode = analogInputHexMode_[activeAnalogInputWidget_];
+    
+    if (auto *textEntered = ev.getIf<sf::Event::TextEntered>())
+    {
+      char c = static_cast<char>(textEntered->unicode);
+      if (isHexMode)
+      {
+        // Hex mode: allow hex digits (0-9, a-f, A-F) and 'x' for prefix
+        if (std::isxdigit(c) || c == 'x' || c == 'X')
+        {
+          analogInputTextInputs_[activeAnalogInputWidget_] += c;
+        }
+      }
+      else
+      {
+        // Decimal mode: only allow digits
+        if (std::isdigit(c))
+        {
+          analogInputTextInputs_[activeAnalogInputWidget_] += c;
+        }
+      }
+    }
+
+    if (auto *keyPressed = ev.getIf<sf::Event::KeyPressed>())
+    {
+      if (keyPressed->code == sf::Keyboard::Key::Enter)
+      {
+        // Parse value based on mode and apply
+        std::string &text = analogInputTextInputs_[activeAnalogInputWidget_];
+        try
+        {
+          int val = 0;
+          if (isHexMode)
+          {
+            if (text.length() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X"))
+            {
+              val = std::stoi(text.substr(2), nullptr, 16);
+            }
+            else
+            {
+              val = std::stoi(text, nullptr, 16);
+            }
+          }
+          else
+          {
+            val = std::stoi(text);
+          }
+          if (val >= 0 && val <= 255)
+          {
+            sim_.setAnalogSignal(activeAnalogInputWidget_, static_cast<uint8_t>(val));
+          }
+        }
+        catch (...)
+        {
+        }
+        isEditingAnalogInput_ = false;
+        activeAnalogInputWidget_.clear();
+        return;
+      }
+      else if (keyPressed->code == sf::Keyboard::Key::Escape)
+      {
+        // Reset to current value in appropriate format
+        uint8_t val = sim_.getAnalogSignalValue(activeAnalogInputWidget_);
+        if (isHexMode)
+        {
+          char hexBuf[8];
+          snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+          analogInputTextInputs_[activeAnalogInputWidget_] = hexBuf;
+        }
+        else
+        {
+          analogInputTextInputs_[activeAnalogInputWidget_] = std::to_string(val);
+        }
+        isEditingAnalogInput_ = false;
+        activeAnalogInputWidget_.clear();
+        return;
+      }
+      else if (keyPressed->code == sf::Keyboard::Key::Backspace)
+      {
+        if (!analogInputTextInputs_[activeAnalogInputWidget_].empty())
+          analogInputTextInputs_[activeAnalogInputWidget_].pop_back();
+        return;
+      }
+    }
+    return;
+  }
+
   // SFML 3.x uses variant-based events
   if (auto *keyPressed = ev.getIf<sf::Event::KeyPressed>())
   {
@@ -516,6 +642,75 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
       activeCounterWidget_.clear();
     }
 
+    // Check analog input widgets (click to edit value OR toggle hex/dec mode)
+    for (const auto &[inputName, rect] : analogInputWidgets_)
+    {
+      if (isPointInRect(mousePos, rect))
+      {
+        // Check if clicking on the toggle button area (right 50px of widget)
+        float toggleX = rect.position.x + rect.size.x - 50.0f;
+        if (mousePos.x >= toggleX)
+        {
+          // Toggle hex/dec mode
+          analogInputHexMode_[inputName] = !analogInputHexMode_[inputName];
+          // Update the text input to reflect new mode
+          uint8_t val = sim_.getAnalogSignalValue(inputName);
+          if (analogInputHexMode_[inputName])
+          {
+            char hexBuf[8];
+            snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+            analogInputTextInputs_[inputName] = hexBuf;
+          }
+          else
+          {
+            analogInputTextInputs_[inputName] = std::to_string(val);
+          }
+        }
+        else
+        {
+          // Start editing value
+          isEditingAnalogInput_ = true;
+          activeAnalogInputWidget_ = inputName;
+        }
+        return;
+      }
+    }
+
+    // If clicking elsewhere while editing analog inputs, commit changes
+    if (isEditingAnalogInput_ && !activeAnalogInputWidget_.empty())
+    {
+      std::string &text = analogInputTextInputs_[activeAnalogInputWidget_];
+      bool isHexMode = analogInputHexMode_[activeAnalogInputWidget_];
+      try
+      {
+        int val = 0;
+        if (isHexMode)
+        {
+          if (text.length() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X"))
+          {
+            val = std::stoi(text.substr(2), nullptr, 16);
+          }
+          else
+          {
+            val = std::stoi(text, nullptr, 16);
+          }
+        }
+        else
+        {
+          val = std::stoi(text);
+        }
+        if (val >= 0 && val <= 255)
+        {
+          sim_.setAnalogSignal(activeAnalogInputWidget_, static_cast<uint8_t>(val));
+        }
+      }
+      catch (...)
+      {
+      }
+      isEditingAnalogInput_ = false;
+      activeAnalogInputWidget_.clear();
+    }
+
     // Check control buttons
     if (isPointInRect(mousePos, playPauseBtn_))
     {
@@ -610,6 +805,7 @@ void UI::draw(sf::RenderWindow &win)
   drawBTNWidgets(win);
   drawTimerWidgets(win);
   drawCounterWidgets(win);
+  drawAnalogWidgets(win);
 
   // Create a view for the content area to handle clipping and scrolling
   sf::View oldView = win.getView();
@@ -1070,6 +1266,18 @@ sf::Color UI::getSignalColor(int signalId) const
   const auto &signals = sim_.signals();
   if (signalId >= 0 && signalId < static_cast<int>(signals.size()))
   {
+    // Check if this is an analog signal
+    if (prog_.analogSignals.count(signalId) > 0)
+    {
+      // Analog signal: use orange/yellow gradient based on value
+      uint8_t val = signals[signalId];
+      float intensity = static_cast<float>(val) / 255.0f;
+      return sf::Color(
+          static_cast<uint8_t>(180 + intensity * 75),
+          static_cast<uint8_t>(120 + intensity * 80),
+          static_cast<uint8_t>(60 + intensity * 40));
+    }
+    // Digital signal: green for HIGH, red for LOW
     return signals[signalId] != 0 ? Theme::TextGreen : Theme::TextRed;
   }
   return Theme::TextDefault;
@@ -1238,5 +1446,135 @@ void UI::drawCounterWidgets(sf::RenderWindow &win)
     cvText.setPosition(rect.position + sf::Vector2f(10, rect.size.y / 2 + 5));
     cvText.setFillColor(Theme::TextDefault);
     win.draw(cvText);
+  }
+}
+
+void UI::drawAnalogWidgets(sf::RenderWindow &win)
+{
+  if (!fontLoaded_)
+    return;
+
+  // Draw header if there are any analog widgets
+  if (!analogInputWidgets_.empty() || !analogOutputWidgets_.empty())
+  {
+    // Find the Y position after the last widget above analog widgets
+    float headerY = 0;
+    for (const auto &[name, rect] : counterWidgets_)
+    {
+      headerY = std::max(headerY, rect.position.y + rect.size.y);
+    }
+    for (const auto &[name, rect] : btnWidgets_)
+    {
+      headerY = std::max(headerY, rect.position.y + rect.size.y);
+    }
+    if (headerY > 0)
+    {
+      headerY += 15.0f;
+      sf::Text headerText(font_, "ANALOG I/O", 11);
+      headerText.setPosition(sf::Vector2f(sidebarPadding_, headerY));
+      headerText.setFillColor(sf::Color(Theme::TextOrange.r, Theme::TextOrange.g, Theme::TextOrange.b, 200));
+      win.draw(headerText);
+    }
+  }
+
+  // Draw analog input widgets (editable values with hex/dec toggle)
+  for (const auto &[inputName, rect] : analogInputWidgets_)
+  {
+    bool isEditingThis = (isEditingAnalogInput_ && activeAnalogInputWidget_ == inputName);
+    uint8_t currentValue = sim_.getAnalogSignalValue(inputName);
+    bool isHexMode = analogInputHexMode_.count(inputName) > 0 ? analogInputHexMode_.at(inputName) : true;
+
+    // Choose background color based on value - gradient from dark to bright
+    float intensity = static_cast<float>(currentValue) / 255.0f;
+    sf::Color bgColor(
+        static_cast<uint8_t>(40 + intensity * 60),
+        static_cast<uint8_t>(50 + intensity * 100),
+        static_cast<uint8_t>(60 + intensity * 80),
+        220);
+
+    // Main widget background (excluding toggle area)
+    sf::RectangleShape widget(sf::Vector2f(rect.size.x - 50.0f, rect.size.y));
+    widget.setPosition(rect.position);
+    widget.setFillColor(bgColor);
+    widget.setOutlineColor(isEditingThis ? Theme::TextYellow : Theme::TextOrange);
+    widget.setOutlineThickness(isEditingThis ? 2 : 1);
+    win.draw(widget);
+
+    // Draw label with value
+    std::string label = "AIN " + inputName + ": ";
+    if (isEditingThis)
+    {
+      label += analogInputTextInputs_[inputName] + "|";
+    }
+    else
+    {
+      if (isHexMode)
+      {
+        char hexBuf[16];
+        snprintf(hexBuf, sizeof(hexBuf), "0x%02X (%d)", currentValue, currentValue);
+        label += hexBuf;
+      }
+      else
+      {
+        char decBuf[16];
+        snprintf(decBuf, sizeof(decBuf), "%d (0x%02X)", currentValue, currentValue);
+        label += decBuf;
+      }
+    }
+
+    sf::Text text(font_, label, static_cast<unsigned int>(Theme::FontSize));
+    text.setPosition(rect.position + sf::Vector2f(10, 5));
+    text.setFillColor(isEditingThis ? Theme::TextYellow : Theme::TextDefault);
+    win.draw(text);
+
+    // Draw hex/dec toggle button on the right side (same height as widget)
+    float toggleWidth = 45.0f;
+    float toggleHeight = rect.size.y;
+    float toggleX = rect.position.x + rect.size.x - toggleWidth;
+    float toggleY = rect.position.y;
+
+    sf::RectangleShape toggleBg(sf::Vector2f(toggleWidth, toggleHeight));
+    toggleBg.setPosition({toggleX, toggleY});
+    toggleBg.setFillColor(isHexMode ? sf::Color(80, 100, 60) : sf::Color(60, 80, 100));
+    toggleBg.setOutlineColor(sf::Color(100, 100, 110));
+    toggleBg.setOutlineThickness(1);
+    win.draw(toggleBg);
+
+    sf::Text toggleText(font_, isHexMode ? "HEX" : "DEC", 14);
+    float textY = toggleY + (toggleHeight - 16.0f) / 2.0f;
+    toggleText.setPosition({toggleX + 8, textY});
+    toggleText.setFillColor(sf::Color::White);
+    win.draw(toggleText);
+  }
+
+  // Draw analog output widgets (read-only, always show both hex and dec)
+  for (const auto &[outputName, rect] : analogOutputWidgets_)
+  {
+    uint8_t currentValue = sim_.getAnalogSignalValue(outputName);
+
+    // Choose background color based on value - gradient from dark to bright
+    float intensity = static_cast<float>(currentValue) / 255.0f;
+    sf::Color bgColor(
+        static_cast<uint8_t>(35 + intensity * 50),
+        static_cast<uint8_t>(40 + intensity * 80),
+        static_cast<uint8_t>(55 + intensity * 100),
+        220);
+
+    sf::RectangleShape widget(rect.size);
+    widget.setPosition(rect.position);
+    widget.setFillColor(bgColor);
+    widget.setOutlineColor(sf::Color(100, 140, 180));
+    widget.setOutlineThickness(1);
+    win.draw(widget);
+
+    // Draw label with both hex and decimal value
+    char hexBuf[16];
+    snprintf(hexBuf, sizeof(hexBuf), "0x%02X (%d)", currentValue, currentValue);
+    std::string label = "AOUT " + outputName + ": " + hexBuf;
+
+    sf::Text text(font_, label, static_cast<unsigned int>(Theme::FontSize));
+    text.setPosition(rect.position + sf::Vector2f(10, 5));
+    text.setFillColor(Theme::TextDefault);
+    win.draw(text);
   }
 }

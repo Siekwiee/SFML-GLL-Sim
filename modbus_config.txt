@@ -3,3 +3,5 @@ port=502
 slave_id=1
 num_inputs=16
 num_outputs=16
+num_analog_inputs=0
+num_analog_outputs=0

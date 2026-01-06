@@ -26,6 +26,46 @@ IN a, b, c
 OUT x, y, z
 ```
 
+### **Analog Input and Output signals**
+
+Analog inputs and outputs are declared using the `AIN` and `AOUT` keywords. Unlike digital signals (which are boolean 0/1), analog signals hold 8-bit integer hex values (0x00-0xFF, or 0-255 decimal).
+
+```
+AIN sensorValue, temperature
+AOUT motorSpeed, valvePosition
+```
+
+**All integer values are compatible:** Counter CV outputs, analog signals (AIN/AOUT), and literal values are all stored as 8-bit integers (0-255). This means you can freely compare them against each other using the comparators (LT, GT, EQ).
+
+```
+AIN sensorValue
+IN countPulse, reset
+OUT sensorAboveCount, sensorBelowThreshold, sensorMatchesCount
+
+# Counter with CV output
+CTU pulseCounter("100", countPulse, reset) -> counterDone, counterCV
+
+# Compare analog input against counter CV value
+GT sensorVsCounter(sensorValue, counterCV) -> sensorAboveCount
+
+# Compare analog input against hex literal
+LT belowThreshold(sensorValue, "0x80") -> sensorBelowThreshold
+
+# Compare analog input against counter value for equality
+EQ matchesCount(sensorValue, counterCV) -> sensorMatchesCount
+```
+
+**UI Interaction:**
+- Analog input widgets display values in hex format (e.g., `0x7F`)
+- Click on an AIN widget to edit the value manually
+- A visual bar indicator shows the relative value (0-255 scale)
+
+**Literal Syntax for Comparators:**
+You can use hex or decimal literals in comparator arguments:
+- `"0xFF"` - hex format with 0x prefix
+- `"0x10"` - any hex value
+- `"128"` - decimal format also supported
+
 ### **Nodes**
 
 Nodes are used to descibe the logic operations in the circut. Each gate is declared with a type, a name, a parenthesized list of inputs, and a comma-separated list of outputs, coming after the `->`.
@@ -410,10 +450,26 @@ BTN myButton() -> is_pressed
 
 GLL supports Modbus TCP as a client. It can synchronize its internal signals with a remote Modbus server (like from Factory I/O).
 
-- **Inputs**: Signals named `INPUT_0`, `INPUT_1`, ..., `INPUT_N` are automatically mapped to Modbus Discrete Inputs or Input Registers.
-- **Outputs**: Signals named `OUTPUT_0`, `OUTPUT_1`, ..., `OUTPUT_N` are automatically mapped to Modbus Coils or Holding Registers.
+**Digital I/O (Boolean signals):**
+- **Inputs**: Signals named `INPUT_0`, `INPUT_1`, ..., `INPUT_N` are automatically mapped to Modbus Discrete Inputs (bits).
+- **Outputs**: Signals named `OUTPUT_0`, `OUTPUT_1`, ..., `OUTPUT_N` are automatically mapped to Modbus Coils (bits).
 
-Mapping configuration (IP, Port, Slave ID, and Bit Counts) can be adjusted in the **Settings** menu. These settings are saved to `modbus_config`.
+**Analog I/O (Hex values 0x00-0xFF):**
+- **Analog Inputs**: Signals named `AINPUT_0`, `AINPUT_1`, ..., `AINPUT_N` are automatically mapped to Modbus Input Registers (16-bit, lower 8 bits used).
+- **Analog Outputs**: Signals named `AOUTPUT_0`, `AOUTPUT_1`, ..., `AOUTPUT_N` are automatically mapped to Modbus Holding Registers (16-bit, 8-bit value written).
+
+**Example with Modbus analog I/O:**
+```
+# Declare analog inputs/outputs with Modbus-compatible names
+AIN AINPUT_0(sensorValue), AINPUT_1(temperature)
+AOUT AOUTPUT_0(motorSpeed), AOUTPUT_1(valvePos)
+
+# Use comparators with the analog signals
+GT tempHigh(temperature, "0x80") -> overheated
+LT tempLow(temperature, "0x10") -> tooCold
+```
+
+Mapping configuration (IP, Port, Slave ID, Bit Counts, and Analog Register Counts) can be adjusted in the **Settings** menu. These settings are saved to `modbus_config`.
 
 ### **Simulation Features**
 

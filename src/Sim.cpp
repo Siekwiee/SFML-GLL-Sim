@@ -9,6 +9,16 @@ Simulator::Simulator(const Program &p) : prog_(p)
   next_ = cur_;
   prevStateAtCycleStart_.assign(n, 0);
 
+  // Initialize constant signal values (for hex literals in comparators)
+  for (const auto &[sigId, value] : prog_.constantSignalValues)
+  {
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size()))
+    {
+      cur_[sigId] = static_cast<uint8_t>(value);
+      next_[sigId] = static_cast<uint8_t>(value);
+    }
+  }
+
   // Compute topological order - cycles are now handled by including all nodes
   bool allNodesIncluded = computeTopologicalOrder(prog_, topo_);
   hasCycles_ = !allNodesIncluded || topo_.size() < prog_.nodes.size();
@@ -373,6 +383,48 @@ bool Simulator::getSignalValue(const std::string &signalName) const
 
       return cur_[sigId] != 0;
     }
+  }
+  return false;
+}
+
+void Simulator::setAnalogSignal(const std::string &signalName, uint8_t value)
+{
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end())
+  {
+    int sigId = it->second;
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size()))
+    {
+      pendingSignals_[sigId] = value;
+    }
+  }
+}
+
+uint8_t Simulator::getAnalogSignalValue(const std::string &signalName) const
+{
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end())
+  {
+    int sigId = it->second;
+    if (sigId >= 0 && sigId < static_cast<int>(cur_.size()))
+    {
+      // Return pending value if available for immediate UI feedback
+      auto itP = pendingSignals_.find(sigId);
+      if (itP != pendingSignals_.end())
+        return itP->second;
+
+      return cur_[sigId];
+    }
+  }
+  return 0;
+}
+
+bool Simulator::isAnalogSignal(const std::string &signalName) const
+{
+  auto it = prog_.symbolToSignal.find(signalName);
+  if (it != prog_.symbolToSignal.end())
+  {
+    return prog_.analogSignals.count(it->second) > 0;
   }
   return false;
 }

@@ -2,12 +2,16 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <filesystem>
 
 struct Program
 {
   std::vector<std::string> inputNames, outputNames;
+  std::vector<std::string> analogInputNames, analogOutputNames;  // Analog I/O (hex values 0x00-0xFF)
   std::unordered_map<std::string, int> symbolToSignal;
+  std::unordered_set<int> analogSignals;  // Set of signal IDs that are analog (not boolean)
+  std::unordered_map<int, int> constantSignalValues;  // Signal ID -> constant value (for hex literals)
 
   struct TokenSpan
   {

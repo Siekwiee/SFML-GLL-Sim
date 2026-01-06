@@ -3,6 +3,7 @@ set -e  # Exit on any error
 
 # Default to Debug build
 BUILD_TYPE="Debug"
+CLEAN_BUILD=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -15,10 +16,15 @@ while [[ $# -gt 0 ]]; do
             BUILD_TYPE="Release"
             shift
             ;;
+        -c|--clean)
+            CLEAN_BUILD=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [-d|--debug] [-r|--release] [-h|--help]"
+            echo "Usage: $0 [-d|--debug] [-r|--release] [-c|--clean] [-h|--help]"
             echo "  -d, --debug    Build in Debug mode (default)"
             echo "  -r, --release  Build in Release mode"
+            echo "  -c, --clean    Clean build directory before building"
             echo "  -h, --help     Show this help"
             exit 0
             ;;
@@ -31,6 +37,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "Building SFML project in $BUILD_TYPE mode..."
+
+# Clean build directory if requested
+if [ "$CLEAN_BUILD" = true ] && [ -d "build" ]; then
+    echo "Cleaning build directory..."
+    rm -rf build
+fi
 
 # Create build directory if it doesn't exist
 if [ ! -d "build" ]; then
