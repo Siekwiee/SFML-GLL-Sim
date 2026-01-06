@@ -28,14 +28,14 @@ OUT x, y, z
 
 ### **Analog Input and Output signals**
 
-Analog inputs and outputs are declared using the `AIN` and `AOUT` keywords. Unlike digital signals (which are boolean 0/1), analog signals hold 8-bit integer hex values (0x00-0xFF, or 0-255 decimal).
+Analog inputs and outputs are declared using the `AIN` and `AOUT` keywords. Unlike digital signals (which are boolean 0/1), analog signals hold integer values. The range depends on the configured Modbus register mode: 16-bit mode supports 0-65535, while 32-bit mode supports 0-4,294,967,295.
 
 ```
 AIN sensorValue, temperature
 AOUT motorSpeed, valvePosition
 ```
 
-**All integer values are compatible:** Counter CV outputs, analog signals (AIN/AOUT), and literal values are all stored as 8-bit integers (0-255). This means you can freely compare them against each other using the comparators (LT, GT, EQ).
+**All integer values are compatible:** Counter CV outputs, analog signals (AIN/AOUT), and literal values are all stored internally as 64-bit integers. This means you can freely compare them against each other using the comparators (LT, GT, EQ). The actual range depends on the Modbus register mode (16-bit or 32-bit).
 
 ```
 AIN sensorValue
@@ -56,14 +56,15 @@ EQ matchesCount(sensorValue, counterCV) -> sensorMatchesCount
 ```
 
 **UI Interaction:**
-- Analog input widgets display values in hex format (e.g., `0x7F`)
-- Click on an AIN widget to edit the value manually
-- A visual bar indicator shows the relative value (0-255 scale)
+
+- Analog input widgets display values in both hex and decimal (e.g., `7F (127)`)
+- Click on an AIN widget to edit the value manually (type raw hex digits or decimal)
+- HEX/DEC toggle button to switch display and input mode
 
 **Literal Syntax for Comparators:**
 You can use hex or decimal literals in comparator arguments:
-- `"0xFF"` - hex format with 0x prefix
-- `"0x10"` - any hex value
+
+- `"00000010"` - any hex value
 - `"128"` - decimal format also supported
 
 ### **Nodes**
@@ -326,7 +327,7 @@ CTU myCounter("10", input, reset) -> done
 You can extract the counter value (CV) as a second output. This allows you to use the counter value with comparators (LT, GT, EQ) or pass it to other nodes.
 
 ```
-# done goes HIGH when CV >= 10, counterValue holds the actual count (0-255)
+# done goes HIGH when CV >= 10, counterValue holds the actual count
 CTU myCounter("10", input, reset) -> done, counterValue
 
 # Compare counter value with another signal
@@ -338,7 +339,6 @@ GT isAboveFive(counterValue, threshold) -> aboveThreshold
 - Positive edge on `CU` → `CV` increases by 1 (max 32767)
 - `R` is HIGH → `CV` resets to 0
 - `CV >= PV` → `Q` is HIGH, otherwise LOW
-- CV output is clamped to 0-255 for signal storage
 
 #### `CTD`
 
@@ -360,7 +360,7 @@ CTD myCounter("5", input, load) -> done
 You can extract the counter value (CV) as a second output. This allows you to use the counter value with comparators (LT, GT, EQ) or pass it to other nodes.
 
 ```
-# done goes HIGH when CV <= 0, counterValue holds the actual count (0-255)
+# done goes HIGH when CV <= 0, counterValue holds the actual count
 CTD myCounter("10", input, load) -> done, counterValue
 ```
 
@@ -369,7 +369,6 @@ CTD myCounter("10", input, load) -> done, counterValue
 - Positive edge on `CD` → `CV` decreases by 1 (stops at 0)
 - `LD` is HIGH → `CV` is set to `PV`
 - `CV <= 0` → `Q` is HIGH, otherwise LOW
-- CV output is clamped to 0-255 for signal storage
 
 #### `LT`
 
@@ -451,14 +450,40 @@ BTN myButton() -> is_pressed
 GLL supports Modbus TCP as a client. It can synchronize its internal signals with a remote Modbus server (like from Factory I/O).
 
 **Digital I/O (Boolean signals):**
+
 - **Inputs**: Signals named `INPUT_0`, `INPUT_1`, ..., `INPUT_N` are automatically mapped to Modbus Discrete Inputs (bits).
 - **Outputs**: Signals named `OUTPUT_0`, `OUTPUT_1`, ..., `OUTPUT_N` are automatically mapped to Modbus Coils (bits).
 
-**Analog I/O (Hex values 0x00-0xFF):**
-- **Analog Inputs**: Signals named `AINPUT_0`, `AINPUT_1`, ..., `AINPUT_N` are automatically mapped to Modbus Input Registers (16-bit, lower 8 bits used).
-- **Analog Outputs**: Signals named `AOUTPUT_0`, `AOUTPUT_1`, ..., `AOUTPUT_N` are automatically mapped to Modbus Holding Registers (16-bit, 8-bit value written).
+**Analog I/O (Register values):**
+
+GLL supports two analog register modes for compatibility with different PLCs:
+
+**16-bit Mode** (Default)
+
+- Range: 0 to 65,535
+- 1 Modbus register per analog signal
+- Compatible with most PLCs and legacy systems
+
+**32-bit Mode** (High Precision)
+
+- Range: 0 to 4,294,967,295
+- 2 Modbus registers per analog signal (big-endian format)
+- For advanced applications requiring extended range
+
+**Signal Mapping:**
+
+- **Analog Inputs**: Signals named `AINPUT_0`, `AINPUT_1`, ..., `AINPUT_N` are mapped to Modbus Input Registers.
+- **Analog Outputs**: Signals named `AOUTPUT_0`, `AOUTPUT_1`, ..., `AOUTPUT_N` are mapped to Modbus Holding Registers.
+
+In 32-bit mode, each analog signal uses 2 consecutive registers:
+
+- `AINPUT_0` uses Input Registers 0-1
+- `AINPUT_1` uses Input Registers 2-3
+- `AOUTPUT_0` uses Holding Registers 0-1
+- etc.
 
 **Example with Modbus analog I/O:**
+
 ```
 # Declare analog inputs/outputs with Modbus-compatible names
 AIN AINPUT_0(sensorValue), AINPUT_1(temperature)
@@ -469,7 +494,7 @@ GT tempHigh(temperature, "0x80") -> overheated
 LT tempLow(temperature, "0x10") -> tooCold
 ```
 
-Mapping configuration (IP, Port, Slave ID, Bit Counts, and Analog Register Counts) can be adjusted in the **Settings** menu. These settings are saved to `modbus_config`.
+Mapping configuration (IP, Port, Slave ID, Bit Counts, Analog Register Counts, and Register Mode) can be adjusted in the **Settings** menu. These settings are saved to `modbus_config.txt`.
 
 ### **Simulation Features**
 
@@ -496,6 +521,8 @@ Use the `+` and `-` keys or the slider in the sidebar to adjust the simulation s
 - **Click** BTN widgets for momentary press
 - **Ctrl+Click** BTN widgets to latch (hold state)
 - **Click** Timer widgets to edit preset time (if not hardcoded)
+- **Click** Analog input widgets to edit value (type hex digits in HEX mode, decimal in DEC mode)
+- **Click** HEX/DEC toggle on analog widgets to switch display mode
 
 ### **Execution Model**
 

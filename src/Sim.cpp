@@ -14,8 +14,8 @@ Simulator::Simulator(const Program &p) : prog_(p)
   {
     if (sigId >= 0 && sigId < static_cast<int>(cur_.size()))
     {
-      cur_[sigId] = static_cast<uint8_t>(value);
-      next_[sigId] = static_cast<uint8_t>(value);
+      cur_[sigId] = static_cast<uint64_t>(value);
+      next_[sigId] = static_cast<uint64_t>(value);
     }
   }
 
@@ -347,7 +347,7 @@ void Simulator::toggleSignal(const std::string &signalName)
     int sigId = it->second;
     if (sigId >= 0 && sigId < static_cast<int>(cur_.size()))
     {
-      uint8_t current = cur_[sigId];
+      uint64_t current = cur_[sigId];
       if (pendingSignals_.count(sigId))
         current = pendingSignals_[sigId];
       pendingSignals_[sigId] = current ? 0 : 1;
@@ -387,7 +387,7 @@ bool Simulator::getSignalValue(const std::string &signalName) const
   return false;
 }
 
-void Simulator::setAnalogSignal(const std::string &signalName, uint8_t value)
+void Simulator::setAnalogSignal(const std::string &signalName, uint64_t value)
 {
   auto it = prog_.symbolToSignal.find(signalName);
   if (it != prog_.symbolToSignal.end())
@@ -400,7 +400,7 @@ void Simulator::setAnalogSignal(const std::string &signalName, uint8_t value)
   }
 }
 
-uint8_t Simulator::getAnalogSignalValue(const std::string &signalName) const
+uint64_t Simulator::getAnalogSignalValue(const std::string &signalName) const
 {
   auto it = prog_.symbolToSignal.find(signalName);
   if (it != prog_.symbolToSignal.end())
@@ -684,8 +684,7 @@ bool Simulator::evaluateNode_(int nodeIdx)
     // If CV output signal is defined, write the counter value to it
     if (n.cvOutputSignal >= 0 && n.cvOutputSignal < static_cast<int>(next_.size()))
     {
-      // Clamp to uint8_t range for signal storage (0-255)
-      next_[n.cvOutputSignal] = static_cast<uint8_t>(std::min(cv, 255));
+      next_[n.cvOutputSignal] = static_cast<uint64_t>(cv);
     }
     break;
   }
@@ -724,8 +723,7 @@ bool Simulator::evaluateNode_(int nodeIdx)
     // If CV output signal is defined, write the counter value to it
     if (n.cvOutputSignal >= 0 && n.cvOutputSignal < static_cast<int>(next_.size()))
     {
-      // Clamp to uint8_t range for signal storage (0-255)
-      next_[n.cvOutputSignal] = static_cast<uint8_t>(std::min(cv, 255));
+      next_[n.cvOutputSignal] = static_cast<uint64_t>(cv);
     }
     break;
   }

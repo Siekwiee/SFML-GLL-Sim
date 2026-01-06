@@ -2,18 +2,25 @@
 
 ## All notable changes to **Gates** (the SFML **GLL** logic simulator) will be documented in this file.
 
+## 0.0.7 - 2026-01-06
+
+- Added configurable register mode in settings: 16-bit (0-65535) or 32-bit (0-4,294,967,295)
+- 32-bit mode uses 2 consecutive Modbus registers per signal (big-endian)
+- Added settings for analog input/output counts in Modbus settings dialog
+- Analog widgets display both hex and decimal values
+- Fixed analog input parsing to support full 32-bit range
+- Removed CV output clamping to 255
+
 ## 0.0.6 - 2026-01-06
 
-- Added AIN (Analog Input) and AOUT (Analog Output) signal declarations for 8-bit hex values (0x00-0xFF)
+- Added AIN (Analog Input) and AOUT (Analog Output) signal declarations
 - Added hex literal support in comparators ("0xFF", "0x80") and decimal literals ("128")
 - Counter CV outputs, analog signals, and literals are all compatible for comparisons
 - Added analog input widgets with editable values and HEX/DEC toggle switch
 - Added analog output widgets (read-only display)
 - Added Modbus TCP support for analog I/O (AINPUT_N/AOUTPUT_N mapped to registers)
-- Removed ESC key closing the application instead ESC jumps out of the current selected text input and reverts changes made.
-- Updated [GLL_Documentation.md](GLL_Documentation.md#Syntax) with AIN/AOUT syntax and added samples/tests/analog_comparators.gll
-
-
+- Removed ESC key closing the application - ESC now exits text input and reverts changes
+- Updated [GLL_Documentation.md](GLL_Documentation.md#Syntax) with AIN/AOUT syntax
 
 ## 0.0.5 - 2025-12-29
 

@@ -204,7 +204,7 @@ ParseResult parseFile(const std::string& path, Program& out) {
       continue;
     }
 
-    // Parse AIN (Analog Input) declaration - values are 0x00-0xFF (0-255)
+    // Parse AIN (Analog Input) declaration
     if (line.substr(0, 4) == "AIN ") {
       std::string rest = line.substr(4);
       auto items = split(rest, ',');
@@ -245,7 +245,7 @@ ParseResult parseFile(const std::string& path, Program& out) {
       continue;
     }
 
-    // Parse AOUT (Analog Output) declaration - values are 0x00-0xFF (0-255)
+    // Parse AOUT (Analog Output) declaration
     if (line.substr(0, 5) == "AOUT ") {
       std::string rest = line.substr(5);
       auto items = split(rest, ',');

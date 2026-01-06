@@ -45,7 +45,10 @@ private:
   std::string slaveIdInput_;
   std::string numInputsInput_;
   std::string numOutputsInput_;
-  int activeInputField_ = -1; // 0=IP, 1=Port, 2=SlaveID, 3=NumInputs, 4=NumOutputs
+  std::string numAnalogInputsInput_;
+  std::string numAnalogOutputsInput_;
+  bool registerMode32Bit_ = false;
+  int activeInputField_ = -1; // 0=IP, 1=Port, 2=SlaveID, 3=NumInputs, 4=NumOutputs, 5=AnalogInputs, 6=AnalogOutputs
 
   // Mouse state
   bool mouseDown_ = false;

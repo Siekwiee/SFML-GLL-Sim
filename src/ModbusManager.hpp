@@ -43,6 +43,12 @@ public:
     int getNumAnalogInputs() const { return numAnalogInputs_; }
     int getNumAnalogOutputs() const { return numAnalogOutputs_; }
 
+    enum class AnalogRegisterMode {
+        BITS_16,
+        BITS_32
+    };
+    void setAnalogRegisterMode(AnalogRegisterMode mode) { analogRegisterMode_ = mode; }
+    AnalogRegisterMode getAnalogRegisterMode() const { return analogRegisterMode_; }
     // Persistent settings management
     void loadConfig();
     void saveConfig();
@@ -61,12 +67,13 @@ private:
     int numOutputs_ = 8;
     std::vector<uint8_t> inputBits_;
     std::vector<uint8_t> coilBits_;
-    
-    // Buffers for analog I/O (16-bit registers, we use lower 8 bits)
+
+    // Buffer for analog I/O
     int numAnalogInputs_ = 0;
     int numAnalogOutputs_ = 0;
     std::vector<uint16_t> inputRegisters_;
     std::vector<uint16_t> holdingRegisters_;
+    AnalogRegisterMode analogRegisterMode_ = AnalogRegisterMode::BITS_16;
 };
 
 

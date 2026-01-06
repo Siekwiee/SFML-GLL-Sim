@@ -20,6 +20,9 @@ UI::UI(const Program &prog, Simulator &sim, ModbusManager &modbus)
   slaveIdInput_ = std::to_string(modbus_.getSlaveId());
   numInputsInput_ = std::to_string(modbus_.getNumInputs());
   numOutputsInput_ = std::to_string(modbus_.getNumOutputs());
+  numAnalogInputsInput_ = std::to_string(modbus_.getNumAnalogInputs());
+  numAnalogOutputsInput_ = std::to_string(modbus_.getNumAnalogOutputs());
+  registerMode32Bit_ = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32);
 
   // Layout will be updated when window size is known
   // Default initialization
@@ -212,11 +215,11 @@ void UI::updateBTNWidgets()
     // Initialize text input with current value
     if (analogInputTextInputs_.count(inputName) == 0)
     {
-      uint8_t val = sim_.getAnalogSignalValue(inputName);
+      uint64_t val = sim_.getAnalogSignalValue(inputName);
       if (analogInputHexMode_[inputName])
       {
-        char hexBuf[8];
-        snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+        char hexBuf[20];
+        snprintf(hexBuf, sizeof(hexBuf), "%llX", static_cast<unsigned long long>(val));
         analogInputTextInputs_[inputName] = hexBuf;
       }
       else
@@ -283,6 +286,10 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
           target = &numInputsInput_;
         else if (activeInputField_ == 4)
           target = &numOutputsInput_;
+        else if (activeInputField_ == 5)
+          target = &numAnalogInputsInput_;
+        else if (activeInputField_ == 6)
+          target = &numAnalogOutputsInput_;
 
         if (target)
         {
@@ -302,23 +309,32 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
     if (auto *mousePressed = ev.getIf<sf::Event::MouseButtonPressed>())
     {
       sf::Vector2f mousePos(static_cast<float>(mousePressed->position.x), static_cast<float>(mousePressed->position.y));
-      float cardWidth = 400.0f;
-      float cardHeight = 400.0f;
+      float cardWidth = 450.0f;
+      float cardHeight = 520.0f;
       sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
 
-      // Check input fields
+      // Check input fields (7 text fields)
       activeInputField_ = -1;
-      for (int i = 0; i < 5; ++i)
+      for (int i = 0; i < 7; ++i)
       {
-        sf::FloatRect fieldRect({cardPos.x + 150, cardPos.y + 70 + i * 40 - 5}, {200, 30});
+        sf::FloatRect fieldRect({cardPos.x + 180, cardPos.y + 70 + i * 40 - 5}, {220, 30});
         if (isPointInRect(mousePos, fieldRect))
         {
           activeInputField_ = i;
         }
       }
 
+      // Check register mode toggle button
+      sf::FloatRect toggleRect({cardPos.x + 180, cardPos.y + 70 + 7 * 40 - 5}, {220, 30});
+      if (isPointInRect(mousePos, toggleRect))
+      {
+        registerMode32Bit_ = !registerMode32Bit_;
+        modbus_.setAnalogRegisterMode(registerMode32Bit_ ? ModbusManager::AnalogRegisterMode::BITS_32 
+                                                          : ModbusManager::AnalogRegisterMode::BITS_16);
+      }
+
       // Connect Button
-      sf::FloatRect connectBtnRect({cardPos.x + 20, cardPos.y + 340}, {100, 40});
+      sf::FloatRect connectBtnRect({cardPos.x + 20, cardPos.y + cardHeight - 60}, {100, 40});
       if (isPointInRect(mousePos, connectBtnRect))
       {
         if (modbus_.isConnected())
@@ -334,6 +350,10 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
             modbus_.setSlaveId(std::stoi(slaveIdInput_));
             modbus_.setNumInputs(std::stoi(numInputsInput_));
             modbus_.setNumOutputs(std::stoi(numOutputsInput_));
+            modbus_.setNumAnalogInputs(std::stoi(numAnalogInputsInput_));
+            modbus_.setNumAnalogOutputs(std::stoi(numAnalogOutputsInput_));
+            modbus_.setAnalogRegisterMode(registerMode32Bit_ ? ModbusManager::AnalogRegisterMode::BITS_32 
+                                                              : ModbusManager::AnalogRegisterMode::BITS_16);
           }
           catch (...)
           {
@@ -343,7 +363,7 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
       }
 
       // Close Button
-      sf::FloatRect closeBtnRect({cardPos.x + 280, cardPos.y + 340}, {100, 40});
+      sf::FloatRect closeBtnRect({cardPos.x + cardWidth - 120, cardPos.y + cardHeight - 60}, {100, 40});
       if (isPointInRect(mousePos, closeBtnRect))
       {
         settingsOpen_ = false;
@@ -413,8 +433,8 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
       char c = static_cast<char>(textEntered->unicode);
       if (isHexMode)
       {
-        // Hex mode: allow hex digits (0-9, a-f, A-F) and 'x' for prefix
-        if (std::isxdigit(c) || c == 'x' || c == 'X')
+        // Hex mode: only allow hex digits (0-9, a-f, A-F)
+        if (std::isxdigit(c))
         {
           analogInputTextInputs_[activeAnalogInputWidget_] += c;
         }
@@ -437,29 +457,38 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
         std::string &text = analogInputTextInputs_[activeAnalogInputWidget_];
         try
         {
-          int val = 0;
+          uint64_t val = 0;
           if (isHexMode)
           {
-            if (text.length() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X"))
-            {
-              val = std::stoi(text.substr(2), nullptr, 16);
-            }
-            else
-            {
-              val = std::stoi(text, nullptr, 16);
-            }
+            // Parse as hex (no 0x prefix needed, just raw hex digits)
+            val = std::stoull(text, nullptr, 16);
           }
           else
           {
-            val = std::stoi(text);
+            val = std::stoull(text, nullptr, 10);
           }
-          if (val >= 0 && val <= 255)
+          // Validate based on register mode (16-bit: 0-65535, 32-bit: 0-4294967295)
+          uint64_t maxVal = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32) 
+                            ? 4294967295ULL : 65535ULL;
+          if (val <= maxVal)
           {
-            sim_.setAnalogSignal(activeAnalogInputWidget_, static_cast<uint8_t>(val));
+            sim_.setAnalogSignal(activeAnalogInputWidget_, val);
           }
         }
         catch (...)
         {
+        }
+        // Always sync text input with actual signal value after commit
+        uint64_t actualVal = sim_.getAnalogSignalValue(activeAnalogInputWidget_);
+        if (isHexMode)
+        {
+          char hexBuf[20];
+          snprintf(hexBuf, sizeof(hexBuf), "%llX", static_cast<unsigned long long>(actualVal));
+          analogInputTextInputs_[activeAnalogInputWidget_] = hexBuf;
+        }
+        else
+        {
+          analogInputTextInputs_[activeAnalogInputWidget_] = std::to_string(actualVal);
         }
         isEditingAnalogInput_ = false;
         activeAnalogInputWidget_.clear();
@@ -468,11 +497,11 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
       else if (keyPressed->code == sf::Keyboard::Key::Escape)
       {
         // Reset to current value in appropriate format
-        uint8_t val = sim_.getAnalogSignalValue(activeAnalogInputWidget_);
+        uint64_t val = sim_.getAnalogSignalValue(activeAnalogInputWidget_);
         if (isHexMode)
         {
-          char hexBuf[8];
-          snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+          char hexBuf[20];
+          snprintf(hexBuf, sizeof(hexBuf), "%llX", static_cast<unsigned long long>(val));
           analogInputTextInputs_[activeAnalogInputWidget_] = hexBuf;
         }
         else
@@ -654,11 +683,11 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
           // Toggle hex/dec mode
           analogInputHexMode_[inputName] = !analogInputHexMode_[inputName];
           // Update the text input to reflect new mode
-          uint8_t val = sim_.getAnalogSignalValue(inputName);
+          uint64_t val = sim_.getAnalogSignalValue(inputName);
           if (analogInputHexMode_[inputName])
           {
-            char hexBuf[8];
-            snprintf(hexBuf, sizeof(hexBuf), "0x%02X", val);
+            char hexBuf[20];
+            snprintf(hexBuf, sizeof(hexBuf), "%llX", static_cast<unsigned long long>(val));
             analogInputTextInputs_[inputName] = hexBuf;
           }
           else
@@ -683,29 +712,37 @@ void UI::handleEvent(sf::RenderWindow &win, const sf::Event &ev)
       bool isHexMode = analogInputHexMode_[activeAnalogInputWidget_];
       try
       {
-        int val = 0;
+        uint64_t val = 0;
         if (isHexMode)
         {
-          if (text.length() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X"))
-          {
-            val = std::stoi(text.substr(2), nullptr, 16);
-          }
-          else
-          {
-            val = std::stoi(text, nullptr, 16);
-          }
+          val = std::stoull(text, nullptr, 16);
         }
         else
         {
-          val = std::stoi(text);
+          val = std::stoull(text, nullptr, 10);
         }
-        if (val >= 0 && val <= 255)
+        // Validate based on register mode (16-bit: 0-65535, 32-bit: 0-4294967295)
+        uint64_t maxVal = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32) 
+                          ? 4294967295ULL : 65535ULL;
+        if (val <= maxVal)
         {
-          sim_.setAnalogSignal(activeAnalogInputWidget_, static_cast<uint8_t>(val));
+          sim_.setAnalogSignal(activeAnalogInputWidget_, val);
         }
       }
       catch (...)
       {
+      }
+      // Always sync text input with actual signal value after commit
+      uint64_t actualVal = sim_.getAnalogSignalValue(activeAnalogInputWidget_);
+      if (isHexMode)
+      {
+        char hexBuf[20];
+        snprintf(hexBuf, sizeof(hexBuf), "%llX", static_cast<unsigned long long>(actualVal));
+        text = hexBuf;
+      }
+      else
+      {
+        text = std::to_string(actualVal);
       }
       isEditingAnalogInput_ = false;
       activeAnalogInputWidget_.clear();
@@ -1270,8 +1307,10 @@ sf::Color UI::getSignalColor(int signalId) const
     if (prog_.analogSignals.count(signalId) > 0)
     {
       // Analog signal: use orange/yellow gradient based on value
-      uint8_t val = signals[signalId];
-      float intensity = static_cast<float>(val) / 255.0f;
+      uint64_t val = signals[signalId];
+      uint64_t maxVal = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32) 
+                        ? 4294967295ULL : 65535ULL;
+      float intensity = (val > 0) ? std::min(1.0f, static_cast<float>(val) / static_cast<float>(maxVal)) : 0.0f;
       return sf::Color(
           static_cast<uint8_t>(180 + intensity * 75),
           static_cast<uint8_t>(120 + intensity * 80),
@@ -1300,8 +1339,8 @@ void UI::drawSettingsPopup(sf::RenderWindow &win)
   win.draw(overlay);
 
   // Popup card
-  float cardWidth = 400.0f;
-  float cardHeight = 400.0f;
+  float cardWidth = 450.0f;
+  float cardHeight = 520.0f;
   sf::Vector2f cardPos((windowSize_.x - cardWidth) / 2.0f, (windowSize_.y - cardHeight) / 2.0f);
 
   sf::RectangleShape card(sf::Vector2f(cardWidth, cardHeight));
@@ -1324,15 +1363,15 @@ void UI::drawSettingsPopup(sf::RenderWindow &win)
     l.setFillColor(Theme::TextDefault);
     win.draw(l);
 
-    sf::RectangleShape inputBg(sf::Vector2f(200, 30));
-    inputBg.setPosition({cardPos.x + 150, currentY - 5});
+    sf::RectangleShape inputBg(sf::Vector2f(220, 30));
+    inputBg.setPosition({cardPos.x + 180, currentY - 5});
     inputBg.setFillColor(activeInputField_ == id ? sf::Color(60, 60, 70) : sf::Color(30, 30, 35));
     inputBg.setOutlineColor(activeInputField_ == id ? Theme::TextYellow : sf::Color(80, 80, 80));
     inputBg.setOutlineThickness(1);
     win.draw(inputBg);
 
     sf::Text v(font_, value + (activeInputField_ == id ? "|" : ""), 14);
-    v.setPosition({cardPos.x + 160, currentY});
+    v.setPosition({cardPos.x + 190, currentY});
     v.setFillColor(Theme::TextDefault);
     win.draw(v);
 
@@ -1342,8 +1381,31 @@ void UI::drawSettingsPopup(sf::RenderWindow &win)
   drawInput("IP Address:", ipInput_, 0);
   drawInput("Port:", portInput_, 1);
   drawInput("Slave ID:", slaveIdInput_, 2);
-  drawInput("Num Inputs:", numInputsInput_, 3);
-  drawInput("Num Outputs:", numOutputsInput_, 4);
+  drawInput("Digital Inputs:", numInputsInput_, 3);
+  drawInput("Digital Outputs:", numOutputsInput_, 4);
+  drawInput("Analog Inputs:", numAnalogInputsInput_, 5);
+  drawInput("Analog Outputs:", numAnalogOutputsInput_, 6);
+
+  // Register Mode toggle
+  sf::Text modeLabel(font_, "Register Mode:", 14);
+  modeLabel.setPosition({cardPos.x + 20, currentY});
+  modeLabel.setFillColor(Theme::TextDefault);
+  win.draw(modeLabel);
+
+  sf::RectangleShape toggleBg(sf::Vector2f(220, 30));
+  toggleBg.setPosition({cardPos.x + 180, currentY - 5});
+  toggleBg.setFillColor(registerMode32Bit_ ? sf::Color(80, 100, 60) : sf::Color(60, 80, 100));
+  toggleBg.setOutlineColor(sf::Color(100, 100, 110));
+  toggleBg.setOutlineThickness(1);
+  win.draw(toggleBg);
+
+  std::string modeText = registerMode32Bit_ ? "32-bit (0-4.29B)" : "16-bit (0-65535)";
+  sf::Text modeValue(font_, modeText, 14);
+  modeValue.setPosition({cardPos.x + 190, currentY});
+  modeValue.setFillColor(sf::Color::White);
+  win.draw(modeValue);
+
+  currentY += 50;
 
   // Status message
   if (!modbus_.getLastError().empty())
@@ -1360,27 +1422,27 @@ void UI::drawSettingsPopup(sf::RenderWindow &win)
     status.setFillColor(Theme::TextGreen);
     win.draw(status);
   }
-  currentY = cardPos.y + 340;
 
   // Connect/Disconnect Button
+  float btnY = cardPos.y + cardHeight - 60;
   sf::RectangleShape btn(sf::Vector2f(100, 40));
-  btn.setPosition({cardPos.x + 20, currentY});
+  btn.setPosition({cardPos.x + 20, btnY});
   btn.setFillColor(modbus_.isConnected() ? Theme::ErrorColor : Theme::ButtonRunning);
   win.draw(btn);
 
   sf::Text btnText(font_, modbus_.isConnected() ? "Disconnect" : "Connect", 14);
-  btnText.setPosition({cardPos.x + 30, currentY + 10});
+  btnText.setPosition({cardPos.x + 30, btnY + 10});
   btnText.setFillColor(sf::Color::White);
   win.draw(btnText);
 
   // Close Button
   sf::RectangleShape closeBtn(sf::Vector2f(100, 40));
-  closeBtn.setPosition({cardPos.x + 280, currentY});
+  closeBtn.setPosition({cardPos.x + cardWidth - 120, btnY});
   closeBtn.setFillColor(Theme::ButtonDefault);
   win.draw(closeBtn);
 
   sf::Text closeText(font_, "Close", 14);
-  closeText.setPosition({cardPos.x + 310, currentY + 10});
+  closeText.setPosition({cardPos.x + cardWidth - 110, btnY + 10});
   closeText.setFillColor(sf::Color::White);
   win.draw(closeText);
 }
@@ -1481,11 +1543,13 @@ void UI::drawAnalogWidgets(sf::RenderWindow &win)
   for (const auto &[inputName, rect] : analogInputWidgets_)
   {
     bool isEditingThis = (isEditingAnalogInput_ && activeAnalogInputWidget_ == inputName);
-    uint8_t currentValue = sim_.getAnalogSignalValue(inputName);
+    uint64_t currentValue = sim_.getAnalogSignalValue(inputName);
     bool isHexMode = analogInputHexMode_.count(inputName) > 0 ? analogInputHexMode_.at(inputName) : true;
 
-    // Choose background color based on value - gradient from dark to bright
-    float intensity = static_cast<float>(currentValue) / 255.0f;
+    // Choose background color based on value - use log scale for better visibility
+    uint64_t maxVal = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32) 
+                      ? 4294967295ULL : 65535ULL;
+    float intensity = (currentValue > 0) ? std::min(1.0f, static_cast<float>(currentValue) / static_cast<float>(maxVal)) : 0.0f;
     sf::Color bgColor(
         static_cast<uint8_t>(40 + intensity * 60),
         static_cast<uint8_t>(50 + intensity * 100),
@@ -1510,14 +1574,14 @@ void UI::drawAnalogWidgets(sf::RenderWindow &win)
     {
       if (isHexMode)
       {
-        char hexBuf[16];
-        snprintf(hexBuf, sizeof(hexBuf), "0x%02X (%d)", currentValue, currentValue);
+        char hexBuf[32];
+        snprintf(hexBuf, sizeof(hexBuf), "%llX (%llu)", static_cast<unsigned long long>(currentValue), static_cast<unsigned long long>(currentValue));
         label += hexBuf;
       }
       else
       {
-        char decBuf[16];
-        snprintf(decBuf, sizeof(decBuf), "%d (0x%02X)", currentValue, currentValue);
+        char decBuf[32];
+        snprintf(decBuf, sizeof(decBuf), "%llu (%llX)", static_cast<unsigned long long>(currentValue), static_cast<unsigned long long>(currentValue));
         label += decBuf;
       }
     }
@@ -1550,10 +1614,12 @@ void UI::drawAnalogWidgets(sf::RenderWindow &win)
   // Draw analog output widgets (read-only, always show both hex and dec)
   for (const auto &[outputName, rect] : analogOutputWidgets_)
   {
-    uint8_t currentValue = sim_.getAnalogSignalValue(outputName);
+    uint64_t currentValue = sim_.getAnalogSignalValue(outputName);
 
-    // Choose background color based on value - gradient from dark to bright
-    float intensity = static_cast<float>(currentValue) / 255.0f;
+    // Choose background color based on value - use log scale for better visibility
+    uint64_t maxVal = (modbus_.getAnalogRegisterMode() == ModbusManager::AnalogRegisterMode::BITS_32) 
+                      ? 4294967295ULL : 65535ULL;
+    float intensity = (currentValue > 0) ? std::min(1.0f, static_cast<float>(currentValue) / static_cast<float>(maxVal)) : 0.0f;
     sf::Color bgColor(
         static_cast<uint8_t>(35 + intensity * 50),
         static_cast<uint8_t>(40 + intensity * 80),
@@ -1568,8 +1634,8 @@ void UI::drawAnalogWidgets(sf::RenderWindow &win)
     win.draw(widget);
 
     // Draw label with both hex and decimal value
-    char hexBuf[16];
-    snprintf(hexBuf, sizeof(hexBuf), "0x%02X (%d)", currentValue, currentValue);
+    char hexBuf[32];
+    snprintf(hexBuf, sizeof(hexBuf), "%llX (%llu)", static_cast<unsigned long long>(currentValue), static_cast<unsigned long long>(currentValue));
     std::string label = "AOUT " + outputName + ": " + hexBuf;
 
     sf::Text text(font_, label, static_cast<unsigned int>(Theme::FontSize));

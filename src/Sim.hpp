@@ -30,12 +30,12 @@ struct Simulator {
   void toggleSignal(const std::string& signalName);
   void setSignal(const std::string& signalName, bool value);
   
-  // Analog signal control (for AIN/AOUT signals - 0x00-0xFF)
-  void setAnalogSignal(const std::string& signalName, uint8_t value);
-  uint8_t getAnalogSignalValue(const std::string& signalName) const;
+  // Analog signal control (for AIN/AOUT signals)
+  void setAnalogSignal(const std::string& signalName, uint64_t value);
+  uint64_t getAnalogSignalValue(const std::string& signalName) const;
   bool isAnalogSignal(const std::string& signalName) const;
   
-  const std::vector<uint8_t>& signals() const { return cur_; }
+  const std::vector<uint64_t>& signals() const { return cur_; }
   int currentEvaluatingLine() const { return curLine_; }
   int currentEvaluatingNode() const { return curNodeIdx_; }
   bool isValidTopology() const { return !topo_.empty() && topo_.size() == prog_.nodes.size(); }
@@ -44,7 +44,7 @@ struct Simulator {
 private:
   const Program& prog_;
   std::vector<int> topo_;
-  std::vector<uint8_t> cur_, next_;
+  std::vector<uint64_t> cur_, next_;
   float acc_ = 0.f;
   int curLine_ = -1;
   int curNodeIdx_ = -1;       // Current node being evaluated (for visualization)
@@ -53,10 +53,10 @@ private:
   size_t stepIdx_ = 0;        // Which node in topo_ we're at during slow-step
   bool stepping_ = false;     // Are we in the middle of a slow-step cycle?
   bool hasCycles_ = false;   // Whether the circuit has cycles (unused for execution now)
-  std::vector<uint8_t> prevStateAtCycleStart_; // State at start of cycle for UI feedback
+  std::vector<uint64_t> prevStateAtCycleStart_; // State at start of cycle for UI feedback
   std::unordered_map<int, bool> latch_, momentary_; // by node index
   std::unordered_map<int, bool> pendingLatch_, pendingMomentary_; // buffered inputs
-  std::unordered_map<int, uint8_t> pendingSignals_; // buffered signal changes
+  std::unordered_map<int, uint64_t> pendingSignals_; // buffered signal changes
   std::unordered_map<std::string, float> presentTimeSeconds;
   std::unordered_map<std::string, bool> nodeStatus;
   std::unordered_map<std::string, float> timerElapsedTime; // Elapsed time for each timer (in seconds)
