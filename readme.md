@@ -21,8 +21,9 @@ please refer to [GLL_Documentation.md](docs/GLL_Documentation.md)
 
 - Green = HIGH (1)
 - Red = LOW (0)
+- Orange = Analog Signal 
 
-All IN signals get toggle widgets. BTN nodes are for momentary/latch behavior(WIP).
+To find out more visit the [GLL_Documentation.md](docs/GLL_Documentation.md)
 
 ## Build
 
